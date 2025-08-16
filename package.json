@@ -12,7 +12,10 @@
     "sim": "pnpm -C packages/sim-runner start",
     "train": "pnpm -C packages/evolve start",
     "compile-bot": "pnpm -C packages/evolve compile",
-    "make:cg": "tsx scripts/export-cg-bot.ts"
+    "make:cg": "tsx scripts/export-cg-bot.ts",
+    "tourney:smoke": "pnpm -C packages/sim-runner start tourney --bots greedy,random,evolved --seeds 20 --save-dir ../../viewer/public/replays/tourney",
+    "viewer": "pnpm -C packages/viewer dev",
+    "release:cg": "scripts/release-cg-bot.sh"
   },
   "devDependencies": {
     "tsx": "^4.20.4",

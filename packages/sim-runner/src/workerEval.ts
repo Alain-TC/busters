@@ -1,55 +1,104 @@
-import { parentPort } from 'worker_threads';
-import { runEpisodes } from './runEpisodes';
-import { loadBotModule } from './loadBots';
+import { parentPort } from "worker_threads";
+import { runEpisodes } from "./runEpisodes";
+import { loadBotModule } from "./loadBots";
 
-type Genome = { radarTurn:number; stunRange:number; releaseDist:number; };
+// Match the Genome used across the runner
+type Genome = { radarTurn:number; stunRange:number; releaseDist:number };
 
-function genomeToBot(g: Genome) {
+// Safe defaults if a task comes without a genome (shouldn't happen, but avoid crashes)
+const DEFAULT_GENOME: Genome = { radarTurn: 23, stunRange: 1766, releaseDist: 1600 };
+
+function coerceGenome(g: any): Genome {
+  if (!g || typeof g !== "object") return DEFAULT_GENOME;
+  const r = {
+    radarTurn: Number.isFinite(g.radarTurn) ? g.radarTurn : DEFAULT_GENOME.radarTurn,
+    stunRange: Number.isFinite(g.stunRange) ? g.stunRange : DEFAULT_GENOME.stunRange,
+    releaseDist: Number.isFinite(g.releaseDist) ? g.releaseDist : DEFAULT_GENOME.releaseDist,
+  };
+  return r as Genome;
+}
+
+function genomeToBot(genome: Genome) {
+  const g = coerceGenome(genome); // close over a validated genome
   return {
-    meta: { name: 'HOFGenome', version: 'ga' },
+    meta: { name: "EvolvedBot", version: "ga" },
     act(ctx: any, obs: any) {
+      // Carrying → go home & RELEASE near base
       if (obs.self.carrying !== undefined) {
-        const d = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
-        if (d <= g.releaseDist) return { type: 'RELEASE' };
-        return { type: 'MOVE', x: ctx.myBase.x, y: ctx.myBase.y };
+        const dHome = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
+        if (dHome <= g.releaseDist) return { type: "RELEASE" };
+        return { type: "MOVE", x: ctx.myBase.x, y: ctx.myBase.y };
       }
-      const e = obs.enemies?.[0];
-      if (e && e.range <= g.stunRange && obs.self.stunCd <= 0) return { type: 'STUN', busterId: e.id };
+      // Opportunistic STUN
+      const enemy = obs.enemies?.[0];
+      if (enemy && enemy.range <= g.stunRange && obs.self.stunCd <= 0) {
+        return { type: "STUN", busterId: enemy.id };
+      }
+      // Ghost hunt
       const ghost = obs.ghostsVisible?.[0];
       if (ghost) {
-        if (ghost.range >= 900 && ghost.range <= 1760) return { type: 'BUST', ghostId: ghost.id };
-        return { type: 'MOVE', x: ghost.x, y: ghost.y };
+        if (ghost.range >= 900 && ghost.range <= 1760) return { type: "BUST", ghostId: ghost.id };
+        return { type: "MOVE", x: ghost.x, y: ghost.y };
       }
-      if (!obs.self.radarUsed && obs.tick >= g.radarTurn) return { type: 'RADAR' };
-      return { type: 'MOVE', x: ctx.myBase.x, y: ctx.myBase.y };
+      // One-time RADAR
+      if (!obs.self.radarUsed && obs.tick >= g.radarTurn) return { type: "RADAR" };
+      // Fallback: drift to base
+      return { type: "MOVE", x: ctx.myBase.x, y: ctx.myBase.y };
     }
   };
 }
 
-parentPort!.on('message', async (msg: any) => {
+type OppSpec =
+  | { type: "module"; spec: string }
+  | { type: "genome"; genome: Genome; tag?: string };
+
+type TaskMsg = {
+  id: number;
+  genome?: Genome;      // my genome (should be present)
+  opponent: OppSpec;    // opponent descriptor
+  seed: number;
+  episodes: number;
+  bpp: number;          // bustersPerPlayer
+  ghosts: number;       // ghostCount
+  role: "A" | "B";
+};
+
+async function resolveOpponent(spec: OppSpec) {
+  if (spec.type === "module") {
+    const mod = await loadBotModule(spec.spec);
+    return mod; // expects { act(...) }
+  } else {
+    return genomeToBot(coerceGenome(spec.genome));
+  }
+}
+
+parentPort!.on("message", async (msg: TaskMsg) => {
   try {
-    const me = genomeToBot(msg.genome as Genome);
+    const meBot = genomeToBot(coerceGenome(msg.genome));
+    const oppBot = await resolveOpponent(msg.opponent);
 
-    let opp: any;
-    const op = msg.opponent;
-    if (typeof op === 'string') opp = await loadBotModule(op);
-    else if (op?.type === 'module') opp = await loadBotModule(op.spec);
-    else if (op?.type === 'genome') opp = genomeToBot(op.genome as Genome);
-    else throw new Error('Invalid opponent descriptor');
+    const botA = msg.role === "A" ? meBot : oppBot;
+    const botB = msg.role === "A" ? oppBot : meBot;
 
-    const asRoleB = msg.role === 'B';
     const res = await runEpisodes({
       seed: msg.seed,
       episodes: msg.episodes,
-      bustersPerPlayer: msg.bpp ?? 3,
-      ghostCount: msg.ghosts ?? 12,
-      botA: asRoleB ? opp : me,
-      botB: asRoleB ? me  : opp,
+      bustersPerPlayer: msg.bpp,
+      ghostCount: msg.ghosts,
+      botA,
+      botB,
     });
 
-    const diff = asRoleB ? (res.scoreB - res.scoreA) : (res.scoreA - res.scoreB);
-    parentPort!.postMessage({ ok: true, id: msg.id, diff });
-  } catch (err: any) {
-    parentPort!.postMessage({ ok: false, id: msg?.id, error: String(err?.stack || err) });
+    parentPort!.postMessage({
+      ok: true,
+      id: msg.id,
+      diff: res.scoreA - res.scoreB,
+    });
+  } catch (e: any) {
+    parentPort!.postMessage({
+      ok: false,
+      id: (msg as any)?.id ?? -1,
+      error: (e && e.stack) ? e.stack : String(e),
+    });
   }
 });

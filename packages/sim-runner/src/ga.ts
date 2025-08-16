@@ -4,6 +4,7 @@ import { Worker } from 'worker_threads';
 import { runEpisodes } from './runEpisodes';
 import { loadBotModule } from './loadBots';
 import { loadElo, saveElo, pickOpponentPFSP, ensureOpponentId, recordMatch, PFSPCandidate } from './elo';
+import { selectOpponentsPFSP } from "./pfsp";
 
 // ===== Genome & simple policy =====
 export type Genome = {
