@@ -159,7 +159,7 @@ const baseSeed = opts.seed + si;
     total += diff;
 
     // Update Elo for the opponent (vs baseline 1200 trainee)
-    recordMatch(elo, oppId, diff > 0);
+    (() => { const scoreA = diff>0 ? 1 : (diff<0 ? 0 : 0.5); recordMatch(elo, "evolved", oppId, scoreA); })();
   }
   return total / opts.seedsPer;
 }
@@ -222,7 +222,7 @@ async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<stri
             return;
           }
           sums[t.gi] += msg.diff;
-          recordMatch(elo, t.oppId, msg.diff > 0);
+          (() => { const scoreA = msg.diff>0 ? 1 : (msg.diff<0 ? 0 : 0.5); recordMatch(elo, "evolved", t.oppId, scoreA, 8); })();
 
           w.terminate();
           running--;
@@ -259,7 +259,7 @@ export async function trainCEM(opts: CEMOpts) {
   HOF.length = 0;
 
   // load Elo table (persisted across runs)
-  const elo = loadElo(artDir);
+  const elo = loadElo();
 
   let m = [15, 1700, 1500];
   let s = [6, 120, 120];
@@ -329,7 +329,7 @@ export async function trainCEM(opts: CEMOpts) {
   }
 
   // Persist Elo table
-  saveElo(artDir, elo);
+  saveElo(elo);
 
   return { best: bestEver!, fitness: bestEverFit };
 }

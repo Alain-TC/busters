@@ -6,6 +6,8 @@
   "exports": {
     "./random": "./random-bot.js",
     "./greedy": "./greedy-buster.js",
-    "./evolved": "./evolved-bot.js"
+    "./evolved": "./evolved-bot.js",
+    "./camper": "./camper-stunner.js",
+    "./stunner": "./aggro-chaser.js"
   }
 }
