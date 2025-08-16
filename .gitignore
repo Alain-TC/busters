@@ -1,8 +1,22 @@
-
 # ignore build and generated outputs
 node_modules
 *.log
 packages/sim-runner/artifacts/
 packages/viewer/public/replays/
 my_cg_bot.js
+
+# build and deps
+node_modules/
+dist/
+*.log
+
+# training outputs
+packages/sim-runner/artifacts/
+packages/viewer/public/replays/
+my_cg_bot.js
+
+# editor/OS junk
+.DS_Store
+.vscode/
+.idea/
 
