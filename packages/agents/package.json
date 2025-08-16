@@ -1,0 +1,11 @@
+{
+  "name": "@busters/agents",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "random-bot.js",
+  "exports": {
+    "./random": "./random-bot.js",
+    "./greedy": "./greedy-buster.js",
+    "./evolved": "./evolved-bot.js"
+  }
+}

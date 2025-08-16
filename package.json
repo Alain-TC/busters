@@ -1,0 +1,21 @@
+{
+  "name": "busters-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm -C packages/viewer dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "sim": "pnpm -C packages/sim-runner start",
+    "train": "pnpm -C packages/evolve start",
+    "compile-bot": "pnpm -C packages/evolve compile",
+    "make:cg": "tsx scripts/export-cg-bot.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.4",
+    "typescript": "^5.5.4"
+  }
+}

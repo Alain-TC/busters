@@ -1,0 +1,20 @@
+{
+  "name": "@busters/sim-runner",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/cli.ts",
+  "bin": {
+    "busters-sim": "src/cli.ts"
+  },
+  "dependencies": {
+    "@busters/agents": "workspace:*",
+    "@busters/engine": "workspace:*",
+    "@busters/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts"
+  }
+}

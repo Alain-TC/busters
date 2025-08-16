@@ -1,0 +1,14 @@
+{
+  "name": "@busters/evolve",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@busters/sim-runner": "workspace:*",
+    "@busters/shared": "workspace:*"
+  },
+  "devDependencies": { "tsx": "^4.16.2" },
+  "scripts": {
+    "start": "tsx src/train.ts",
+    "compile": "tsx src/compile_bot.ts"
+  }
+}
