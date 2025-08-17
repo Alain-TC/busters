@@ -1,92 +1,126 @@
-/**
- * Elo rating helpers + JSON persistence
- * File path: packages/sim-runner/artifacts/league_elo.json
- */
-import fs from "node:fs";
-import path from "node:path";
+// elo.ts — PFSP sur Elo avec tie-break déterministe et persistance simple
 
-export type EloTable = Record<string, number>;
+import fs from "fs";
+import path from "path";
 
-const ART_DIR = path.resolve("packages/sim-runner/artifacts");
-const ELO_PATH = path.join(ART_DIR, "league_elo.json");
-
-// Default ratings for known baselines
-const DEFAULTS: EloTable = {
-  greedy: 1000,
-  random: 1000,
+// === Types partagés avec ga.ts (on redéclare pour éviter les imports croisés)
+export type Genome = {
+  radarTurn: number;
+  stunRange: number;
+  releaseDist: number;
 };
 
-export function expectedScore(rA: number, rB: number) {
-  return 1 / (1 + Math.pow(10, (rB - rA) / 400));
+export type PFSPCandidate =
+  | { type: "module"; spec: string; id?: string }
+  | { type: "genome"; genome?: Genome; tag?: string; id?: string };
+
+// === Elo utils
+const DEFAULT_RATING = 1000;
+const K = 32; // K-factor "raisonnable" pour s'adapter sans oscillations
+
+function expectedScore(rA: number, rB: number) {
+  // Elo classique
+  const qA = Math.pow(10, rA / 400);
+  const qB = Math.pow(10, rB / 400);
+  return qA / (qA + qB);
 }
 
-export function updateElo(rA: number, rB: number, scoreA: 0 | 0.5 | 1, K = 24) {
-  const expA = expectedScore(rA, rB);
-  const newA = rA + K * (scoreA - expA);
-  const newB = rB + K * ((1 - scoreA) - (1 - expA));
-  return [newA, newB] as const;
-}
-
-export function ensureDir() {
-  if (!fs.existsSync(ART_DIR)) fs.mkdirSync(ART_DIR, { recursive: true });
-}
-
-export function loadEloTable(): EloTable {
-  ensureDir();
-  if (!fs.existsSync(ELO_PATH)) {
-    return { ...DEFAULTS };
+function getId(c: PFSPCandidate): string {
+  // Id stable et lisible pour logs/persist
+  if (c.id) return c.id;
+  if (c.type === "module") return c.spec;
+  // genome
+  if (c.tag) return c.tag;
+  if (c.genome) {
+    const g = c.genome;
+    return `hof:${g.radarTurn},${g.stunRange},${g.releaseDist}`;
   }
+  return "@busters/agents/greedy";
+}
+
+// Petit hash déterministe (FNV1a + xorshift) pour départager sans biais
+function hash01(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  // xorshift pour "mixer"
+  h ^= h << 13;
+  h ^= h >>> 17;
+  h ^= h << 5;
+  // map sur [0,1)
+  return ((h >>> 0) % 0x100000000) / 0x100000000;
+}
+
+// Désirabilité PFSP : on vise p≈0.5 (matchs serrés)
+// score = 1 quand p=0.5 ; 0 quand p=0 ou 1
+function pfspDesirability(pWin: number): number {
+  // 1 - 2*|p-0.5|  =>  1 à 0.5  ;  0 aux extrêmes
+  return Math.max(0, 1 - 2 * Math.abs(pWin - 0.5));
+}
+
+// === API persistée
+export function loadElo(artifactsDir: string): Record<string, number> {
+  const p = path.resolve(artifactsDir, "elo.json");
   try {
-    const raw = fs.readFileSync(ELO_PATH, "utf8");
-    const j = JSON.parse(raw) as EloTable;
-    // seed defaults if missing
-    for (const [k, v] of Object.entries(DEFAULTS)) {
-      if (j[k] == null) j[k] = v;
+    if (fs.existsSync(p)) {
+      const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
+      if (raw && typeof raw === "object") return raw as Record<string, number>;
     }
-    return j;
-  } catch {
-    return { ...DEFAULTS };
-  }
+  } catch {}
+  return {};
 }
 
-export function saveEloTable(tbl: EloTable) {
-  ensureDir();
-  fs.writeFileSync(ELO_PATH, JSON.stringify(tbl, null, 2));
+export function saveElo(artifactsDir: string, elo: Record<string, number>) {
+  const p = path.resolve(artifactsDir, "elo.json");
+  try {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(elo, null, 2));
+  } catch {}
 }
 
-/**
- * Get rating for id, initializing if missing.
- */
-export function getElo(tbl: EloTable, id: string, init = 1000) {
-  if (tbl[id] == null) tbl[id] = init;
-  return tbl[id];
+// Met à jour la cote de l’adversaire (le "joueur" est un agent virtuel figé à 1000)
+// - si won=true => l’adversaire a perdu
+// - si won=false => l’adversaire a gagné
+export function recordMatch(elo: Record<string, number>, oppId: string, won: boolean) {
+  const rPlayer = DEFAULT_RATING;
+  const rOpp = elo[oppId] ?? DEFAULT_RATING;
+
+  // du point de vue de l'adversaire
+  const expOpp = expectedScore(rOpp, rPlayer);
+  const scoreOpp = won ? 0 : 1;
+
+  const newOpp = rOpp + K * (scoreOpp - expOpp);
+  elo[oppId] = Math.round(newOpp);
 }
 
-/**
- * Record a match result for A vs B (scoreA ∈ {0,0.5,1})
- */
-export function recordResult(tbl: EloTable, idA: string, idB: string, scoreA: 0 | 0.5 | 1, K = 24) {
-  const rA = getElo(tbl, idA);
-  const rB = getElo(tbl, idB);
-  const [nA, nB] = updateElo(rA, rB, scoreA, K);
-  tbl[idA] = nA;
-  tbl[idB] = nB;
-  return tbl;
+// Sélection PFSP avec tie-break déterministe (pas de biais "premier de liste")
+// – On choisit le candidat dont la probabilité de victoire attendue (via Elo) est la plus proche de 0.5
+// – En cas d’égalité parfaite, on départage sur un hash de l’id (stable).
+export function pickOpponentPFSP(elo: Record<string, number>, cands: PFSPCandidate[]): PFSPCandidate {
+  if (!cands.length) throw new Error("pickOpponentPFSP: empty candidates");
+
+  const rPlayer = DEFAULT_RATING;
+
+  // Évalue chaque candidat
+  const scored = cands.map((c) => {
+    const id = getId(c);
+    const rOpp = elo[id] ?? DEFAULT_RATING;
+    const pWin = expectedScore(rPlayer, rOpp); // proba que "nous" gagnions
+    const desirability = pfspDesirability(pWin);
+    const tie = hash01(id); // tie-break déterministe
+    return { c, id, desirability, tie, rOpp };
+  });
+
+  // Argmax sur (desirability, tie) pour éviter le biais au premier
+  scored.sort((a, b) => {
+    if (b.desirability !== a.desirability) return b.desirability - a.desirability;
+    if (b.tie !== a.tie) return b.tie - a.tie; // ordre stable mais "mélangé" par hash
+    // fallback ultime : id lexicographique
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+
+  return scored[0].c;
 }
 
-// --- Compatibility exports for existing ga.ts imports ---
-export { selectOpponentsPFSP as pickOpponentPFSP } from "./pfsp";
-export type PFSPCandidate = { id: string; act?: Function };
-
-// Keep old names working by delegating to the new functions
-export function loadElo() { return loadEloTable(); }
-export function saveElo(tbl: EloTable) { return saveEloTable(tbl); }
-/** Ensure an opponent id exists in the Elo table (returns the table for chaining). */
-export function ensureOpponentId(tbl: EloTable, id: string, init = 1000) {
-  getElo(tbl, id, init);
-  return tbl;
-}
-/** Record a match for A vs B using scoreA ∈ {0, 0.5, 1}. */
-export function recordMatch(tbl: EloTable, idA: string, idB: string, scoreA: 0 | 0.5 | 1, K = 24) {
-  return recordResult(tbl, idA, idB, scoreA, K);
-}

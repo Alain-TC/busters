@@ -1,6 +1,3 @@
-# from the repo root
-mkdir -p scripts
-cat > scripts/train_long.sh <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -117,5 +114,3 @@ echo "Jobs     : $JOBS"
 echo "PFSP sum : $SUMMARY_FILE"
 echo "Bot (ESM): $TOP_BOT"
 echo "Bot (CG) : $CG_BOT"
-BASH
-chmod +x scripts/train_long.sh

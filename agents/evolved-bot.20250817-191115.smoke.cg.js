@@ -1,6 +1,6 @@
 /** Auto-generated single-file bot from genome */
-export const meta = { name: "EvolvedBot", version: "ga" };
-export function act(ctx, obs) {
+const meta = { name: "EvolvedBot", version: "ga" };
+function act(ctx, obs) {
   if (obs.self.carrying !== undefined) {
     const d = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
     if (d <= 1583) return { type: "RELEASE" };
