@@ -7,14 +7,6 @@ import { runEpisodes } from './runEpisodes';
 import { loadBotModule } from './loadBots';
 import { loadElo, saveElo, pickOpponentPFSP, recordMatch, PFSPCandidate } from './elo';
 
-// HOTFIX: PFSP tie-break -> round-robin déterministe par (gi, seed)
-function pickOpponentRoundRobin(cands: PFSPCandidate[], gi: number, seed: number) {
-  if (!cands || !cands.length) throw new Error("PFSP: no candidates");
-  const idx = Math.abs(((gi|0) * 1315423911) ^ ((seed|0) * 2654435761)) % cands.length;
-  return cands[idx];
-}
-
-
 // ===== Genome & simple policy =====
 export type Genome = {
   radarTurn: number;
@@ -231,8 +223,8 @@ async function evalGenomeSerial(g: Genome, opts: CEMOpts, elo: Record<string, nu
 
     // shuffle déterministe pour casser le tie-break
     const cands = shuffleDet(baseCands, baseSeed);
-    const picked = pickOpponentRoundRobin(cands, 0, baseSeed);
-const { opponent, oppId } = toOpponentAndId(picked);
+    const picked = pickOpponentPFSP(elo, cands);
+    const { opponent, oppId } = toOpponentAndId(picked);
 
     logPFSPPick(opts, {
       ts: new Date().toISOString(),
@@ -286,8 +278,8 @@ async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<stri
 
       // shuffle déterministe par (gi, seed)
       const cands = shuffleDet(baseCands, (gi + 1) * 73856093 ^ (baseSeed + 1) * 19349663);
-      const picked = pickOpponentRoundRobin(cands, gi, baseSeed);
-const { opponent, oppId } = toOpponentAndId(picked);
+      const picked = pickOpponentPFSP(elo, cands);
+      const { opponent, oppId } = toOpponentAndId(picked);
 
       logPFSPPick(opts, {
         ts: new Date().toISOString(),

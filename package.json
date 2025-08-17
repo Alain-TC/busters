@@ -17,7 +17,8 @@
     "viewer": "pnpm -C packages/viewer dev",
     "release:cg": "scripts/release-cg-bot.sh",
     "elo:inspect": "tsx scripts/elo-inspect.ts",
-    "elo:inspect:explore": "PFSP_TARGET=0.5 PFSP_TEMP=0.2 tsx scripts/elo-inspect.ts"
+    "elo:inspect:explore": "PFSP_TARGET=0.5 PFSP_TEMP=0.2 tsx scripts/elo-inspect.ts",
+    "pfsp:report": "tsx scripts/pfsp-report.ts"
   },
   "devDependencies": {
     "tsx": "^4.20.4",

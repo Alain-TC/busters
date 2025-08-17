@@ -1,5 +1,3 @@
-# --- HOTFIX PFSP: round-robin déterministe pour éviter le lock sur greedy ---
-cat > hotfix_pfsp_rr.sh <<'SH'
 set -euo pipefail
 f="packages/sim-runner/src/ga.ts"
 cp "$f" "$f.bak.hotfix_rr"
@@ -33,21 +31,3 @@ perl -0777 -pe '
 ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 
 echo "✅ Hotfix appliqué. Backup: $f.bak.hotfix_rr"
-SH
-
-bash hotfix_pfsp_rr.sh
-
-# (facultatif) repartir propre
-rm -f packages/sim-runner/artifacts/elo.json packages/sim-runner/artifacts/pfsp_log.jsonl
-
-# relance vite fait
-pnpm -C packages/sim-runner start train \
-  --algo cem --pop 8 --gens 1 \
-  --seeds-per 3 --eps-per-seed 2 \
-  --jobs 8 --seed 42 \
-  --opp-pool greedy,random,camper,stunner \
-  --hof 4
-
-# check
-sed -n '1,120p' packages/sim-runner/artifacts/pfsp_log.jsonl
-pnpm pfsp:report

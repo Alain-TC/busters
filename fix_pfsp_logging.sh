@@ -1,4 +1,14 @@
-// ga.ts — PFSP oppId stable + Elo seeding + deterministic shuffle des candidats
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET="packages/sim-runner/src/ga.ts"
+BACKUP="$TARGET.bak.before_pfsp_fix"
+mkdir -p "$(dirname "$TARGET")"
+
+[ -f "$TARGET" ] && cp "$TARGET" "$BACKUP"
+
+cat > "$TARGET" <<'TS'
+// Rewritten ga.ts with robust PFSP oppId resolution + logging
 
 import fs from 'fs';
 import path from 'path';
@@ -7,29 +17,11 @@ import { runEpisodes } from './runEpisodes';
 import { loadBotModule } from './loadBots';
 import { loadElo, saveElo, pickOpponentPFSP, recordMatch, PFSPCandidate } from './elo';
 
-// HOTFIX: PFSP tie-break -> round-robin déterministe par (gi, seed)
-function pickOpponentRoundRobin(cands: PFSPCandidate[], gi: number, seed: number) {
-  if (!cands || !cands.length) throw new Error("PFSP: no candidates");
-  const idx = Math.abs(((gi|0) * 1315423911) ^ ((seed|0) * 2654435761)) % cands.length;
-  return cands[idx];
-}
-
-
 // ===== Genome & simple policy =====
 export type Genome = {
   radarTurn: number;
   stunRange: number;
   releaseDist: number;
-};
-
-const DEFAULT_MODULE = '@busters/agents/greedy';
-
-// map CLI --opp-pool names to module specs
-const NAME_TO_SPEC: Record<string, string> = {
-  greedy: '@busters/agents/greedy',
-  random: '@busters/agents/random',
-  camper: '@busters/agents/camper',
-  stunner: '@busters/agents/stunner',
 };
 
 function clamp(n: number, lo: number, hi: number) {
@@ -70,10 +62,10 @@ function vecStd(vs: number[][], m: number[]) {
   return out;
 }
 
-// ===== HOF =====
+// One global Hall of Fame (best of gen each generation)
 const HOF: Genome[] = [];
 
-// ===== Bot from genome =====
+// Bot from genome
 function genomeToBot(genome: Genome) {
   return {
     meta: { name: 'EvolvedBot', version: 'ga' },
@@ -98,7 +90,7 @@ function genomeToBot(genome: Genome) {
   };
 }
 
-// ==== Opponent pool (pour tests locaux) ====
+// ==== Opponent pool ====
 export async function buildBaseOppPool() {
   const greedy = await loadBotModule('@busters/agents/greedy');
   const random = await loadBotModule('@busters/agents/random');
@@ -115,15 +107,16 @@ type CEMOpts = {
   elitePct: number;
   seedsPer: number;
   episodesPerSeed: number;
-  oppPool: Array<{ name?: string; spec?: string; bot?: any; id?: string }>;
+  oppPool: Array<{ name: string; bot: any; spec?: string }>;
   hofSize: number;
   seed: number;
   artifactsDir: string;
   jobs?: number;
 };
 
-// Deterministic env params
+// Deterministic env params from (baseSeed+si)
 function envFromSeed(s: number) {
+  // simple LCG-ish variety
   let r = (s * 1103515245 + 12345) >>> 0;
   const bpp = 2 + (r % 3);   r = (r * 1103515245 + 12345) >>> 0; // 2..4
   const ghosts = 8 + (r % 21);                                   // 8..28
@@ -141,108 +134,53 @@ function logPFSPResult(opts: CEMOpts, entry: any) {
   try { fs.appendFileSync(pfspLogPath(opts), JSON.stringify({ type: 'result', ...entry }) + '\n'); } catch {}
 }
 
-// ===== utils =====
-function splitNames(s?: string): string[] {
-  if (!s) return [];
-  return s.split(/[+, \t]+/).map(x => x.trim()).filter(Boolean);
-}
-
-// xorshift32 RNG pour shuffle déterministe
-function xorshift32(seed: number) {
-  let x = seed >>> 0;
-  return () => {
-    x ^= x << 13; x >>>= 0;
-    x ^= x << 17; x >>>= 0;
-    x ^= x << 5;  x >>>= 0;
-    return (x / 0xFFFFFFFF);
-  };
-}
-function shuffleDet<T>(arr: T[], seed: number): T[] {
-  const a = arr.slice();
-  const rnd = xorshift32(seed || 1);
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-// Build PFSP candidates (modules + HOF) : on inclut TOUJOURS le set de base
-function buildCandidates(oppPool: Array<{ name?: string; spec?: string; id?: string }>, hof: Genome[]): PFSPCandidate[] {
-  const specSet = new Set<string>();
-
-  // depuis CLI
-  for (const o of oppPool) {
-    if (o.spec) specSet.add(o.spec);
-    splitNames(o.name).forEach(n => { const spec = NAME_TO_SPEC[n]; if (spec) specSet.add(spec); });
-    if (o.id && o.id.startsWith('@busters/agents/')) specSet.add(o.id);
-  }
-  // set de base — empêche le syndrome "greedy only"
-  Object.values(NAME_TO_SPEC).forEach(s => specSet.add(s));
-
+// Build PFSP candidates (modules + HOF)
+function buildCandidates(oppPool: Array<{spec?: string}>, hof: Genome[]): PFSPCandidate[] {
   const cands: PFSPCandidate[] = [];
-  for (const spec of specSet) cands.push({ type: 'module', spec, id: spec });
-
+  for (const o of oppPool) if (o.spec) cands.push({ type: 'module', spec: o.spec, id: o.spec });
   for (let i=0;i<hof.length;i++) {
     const g = hof[i];
     const tag = `hof:${g.radarTurn},${g.stunRange},${g.releaseDist}`;
     cands.push({ type: 'genome', tag, genome: g, id: tag });
   }
-
-  if (!cands.length) cands.push({ type: 'module', spec: DEFAULT_MODULE, id: DEFAULT_MODULE });
-  return cands;
+  return cands.length ? cands : [{ type: 'module', spec: oppPool[0].spec!, id: oppPool[0].spec! }];
 }
 
-// Seed Elo avec tous les candidats
-function seedEloWithCandidates(elo: Record<string, number>, cands: PFSPCandidate[], baseline = 1000) {
-  for (const c of cands) {
-    const id = c.type === 'module' ? c.spec : c.id;
-    if (id && elo[id] === undefined) elo[id] = baseline;
-  }
-}
-
-// Opponent + oppId stable
+// Construct a concrete opponent + stable oppId from PFSP pick
 function toOpponentAndId(picked: any) {
   if (picked?.type === 'module') {
-    const spec = picked.spec ?? picked.id ?? DEFAULT_MODULE;
+    const spec = picked.spec ?? picked.id ?? '@busters/agents/greedy';
     return { opponent: { type: 'module', spec }, oppId: spec };
   }
+  // genome candidate
   const g = picked?.genome ?? picked?.g ?? null;
   if (g && typeof g.radarTurn === 'number' && typeof g.stunRange === 'number' && typeof g.releaseDist === 'number') {
     const oppId = `hof:${g.radarTurn},${g.stunRange},${g.releaseDist}`;
     return { opponent: { type: 'genome', genome: g, tag: oppId }, oppId };
   }
-  const tag = picked?.id ?? picked?.tag ?? DEFAULT_MODULE;
+  // last resort: if a tag/id exists, use it; otherwise fallback to greedy module
+  const tag = picked?.id ?? picked?.tag ?? '@busters/agents/greedy';
   if (String(tag).startsWith('hof:')) {
     return { opponent: { type: 'genome', tag }, oppId: String(tag) };
   }
-  return { opponent: { type: 'module', spec: String(tag) }, oppId: String(tag) };
+  return { opponent: { type: 'module', spec: tag }, oppId: String(tag) };
 }
 
-// ===== Serial evaluator =====
+// ===== Serial evaluator with PFSP + Elo updates =====
 async function evalGenomeSerial(g: Genome, opts: CEMOpts, elo: Record<string, number>) {
   let total = 0;
-  const baseCands = buildCandidates(opts.oppPool, HOF);
-  seedEloWithCandidates(elo, baseCands);
+  const cands = buildCandidates(opts.oppPool, HOF);
 
   for (let si = 0; si < opts.seedsPer; si++) {
     const baseSeed = opts.seed + si;
     const { bpp, ghosts } = envFromSeed(baseSeed);
 
-    // shuffle déterministe pour casser le tie-break
-    const cands = shuffleDet(baseCands, baseSeed);
-    const picked = pickOpponentRoundRobin(cands, 0, baseSeed);
-const { opponent, oppId } = toOpponentAndId(picked);
+    const picked = pickOpponentPFSP(elo, cands);
+    const { opponent, oppId } = toOpponentAndId(picked);
 
-    logPFSPPick(opts, {
-      ts: new Date().toISOString(),
-      phase: 'serial',
-      seed: baseSeed,
-      oppId,
-      opp: opponent.type === 'module'
-        ? { type: 'module', spec: (opponent as any).spec }
-        : { type: 'genome', tag: (opponent as any).tag }
-    });
+    logPFSPPick(opts, { ts: new Date().toISOString(), phase: 'serial', seed: baseSeed, oppId,
+      opp: opponent.type === 'module' ? { type: 'module', spec: (opponent as any).spec }
+                                      : { type: 'genome', tag: (opponent as any).tag } });
 
     const me  = genomeToBot(g);
     const opp = opponent.type === 'module'
@@ -261,13 +199,14 @@ const { opponent, oppId } = toOpponentAndId(picked);
     const diff = (res.scoreA - res.scoreB);
     total += diff;
 
+    // Update Elo and log result
     recordMatch(elo, oppId, diff > 0);
     logPFSPResult(opts, { ts: new Date().toISOString(), phase: 'serial', seed: baseSeed, oppId, diff });
   }
   return total / opts.seedsPer;
 }
 
-// ===== Parallel evaluator =====
+// ===== Parallel evaluator (PFSP + Elo updates per task) =====
 async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<string, number>) {
   const jobs = Math.max(1, Math.floor(opts.jobs || 1));
   const workerUrl = new URL("./worker-bootstrap.cjs", import.meta.url);
@@ -276,19 +215,17 @@ async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<stri
   const tasks: Task[] = [];
   let jid = 1;
 
-  const baseCands = buildCandidates(opts.oppPool, HOF);
-  seedEloWithCandidates(elo, baseCands);
+  const cands = buildCandidates(opts.oppPool, HOF);
 
   for (let gi = 0; gi < pop.length; gi++) {
     for (let si = 0; si < opts.seedsPer; si++) {
       const baseSeed = opts.seed + si;
       const { bpp, ghosts } = envFromSeed(baseSeed);
 
-      // shuffle déterministe par (gi, seed)
-      const cands = shuffleDet(baseCands, (gi + 1) * 73856093 ^ (baseSeed + 1) * 19349663);
-      const picked = pickOpponentRoundRobin(cands, gi, baseSeed);
-const { opponent, oppId } = toOpponentAndId(picked);
+      const picked = pickOpponentPFSP(elo, cands);
+      const { opponent, oppId } = toOpponentAndId(picked);
 
+      // log the pick BEFORE enqueuing tasks
       logPFSPPick(opts, {
         ts: new Date().toISOString(),
         phase: 'parallel',
@@ -326,6 +263,7 @@ const { opponent, oppId } = toOpponentAndId(picked);
             return;
           }
 
+          // Aggregate and log result with stable oppId
           sums[t.gi] += msg.diff;
           recordMatch(elo, t.oppId, msg.diff > 0);
           logPFSPResult(opts, {
@@ -362,20 +300,24 @@ const { opponent, oppId } = toOpponentAndId(picked);
   return sums.map(s => s / (opts.seedsPer * 2));
 }
 
-// ===== CEM trainer =====
+// ===== CEM trainer with Elo+PFSP + EMA smoothing =====
 export async function trainCEM(opts: CEMOpts) {
   const elitePct = opts.elitePct ?? 0.2;
   const artDir = path.resolve(process.cwd(), opts.artifactsDir);
   fs.mkdirSync(artDir, { recursive: true });
 
-  HOF.length = 0; // reset HoF
-  const elo = loadElo(artDir); // persisted across runs
+  // reset HoF for this run
+  HOF.length = 0;
+
+  // load Elo table (persisted across runs)
+  const elo = loadElo(artDir);
 
   let m = [15, 1700, 1500];
   let s = [6, 120, 120];
   let bestEverFit = -Infinity;
   let bestEver: Genome | null = null;
 
+  // EMA (smoothed) fitness for selection
   const ema: (number|null)[] = [];
   const emaAlpha = 0.6;
 
@@ -390,6 +332,7 @@ export async function trainCEM(opts: CEMOpts) {
       ? await (async () => { const arr:number[] = []; for (let i=0;i<pop.length;i++) arr.push(await evalGenomeSerial(pop[i], opts, elo)); return arr; })()
       : await evalGenomeParallel(pop, opts, elo);
 
+    // Update EMA and use it for selection
     const smoothed = fits.map((f, i) => {
       const prev = ema[i];
       const v = (prev === null) ? f : (emaAlpha * f + (1 - emaAlpha) * prev);
@@ -411,9 +354,11 @@ export async function trainCEM(opts: CEMOpts) {
       fs.writeFileSync(path.join(artDir, 'simrunner_best_genome.json'), JSON.stringify(bestEver, null, 2));
     }
 
+    // Hall of fame maintenance
     HOF.push(genBest);
     while (HOF.length > opts.hofSize) HOF.shift();
 
+    // Refit from elite EMA
     const elitesCount = Math.max(1, Math.round(opts.pop * elitePct));
     const eliteVecs = idx.slice(0, elitesCount).map(i => {
       const g = pop[i]; return [g.radarTurn, g.stunRange, g.releaseDist];
@@ -428,16 +373,19 @@ export async function trainCEM(opts: CEMOpts) {
     console.log(`CEM gen ${gen}: bestRaw=${genBestFit.toFixed(2)} bestEMA=${genBestEMA.toFixed(2)} m=[${m.map(x=>Math.round(x)).join(',')}] (jobs=${jobs}) env=CRN(bpp 2-4, ghosts 8-28)`);
   }
 
+  // Write a workspace bot from the best genome
   if (bestEver) {
     const outBot = path.resolve(process.cwd(), '../../agents/evolved-bot.js');
     try { compileGenomeToJS(path.join(artDir, 'simrunner_best_genome.json'), outBot); } catch {}
   }
 
+  // Persist Elo table
   saveElo(artDir, elo);
+
   return { best: bestEver!, fitness: bestEverFit };
 }
 
-// ===== Exporter (single-file JS bot) =====
+// ===== Exporter (writes single-file JS bot) =====
 export function compileGenomeToJS(inPath: string, outPath: string) {
   const absIn = path.resolve(process.cwd(), inPath);
   if (!fs.existsSync(absIn)) throw new Error(`Genome JSON not found: ${absIn}`);
@@ -470,3 +418,7 @@ export function compileGenomeToJS(inPath: string, outPath: string) {
   fs.writeFileSync(absOut, code);
   console.log('Wrote single-file bot -> ' + absOut);
 }
+TS
+
+echo "✅ Wrote fixed $TARGET"
+[ -f "$BACKUP" ] && echo "Backup saved at $BACKUP"
