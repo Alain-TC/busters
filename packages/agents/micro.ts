@@ -1,4 +1,4 @@
-/** Tiny, fast "micro-rollout" heuristics used inside assignment scores (EVOL2 M5). */
+/** Tiny, fast "micro-rollout" heuristics used inside assignment scores. */
 /** No external deps; keep everything numerically cheap. */
 
 type Pt = { x: number; y: number };

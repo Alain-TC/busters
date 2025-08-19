@@ -1,4 +1,4 @@
-/** Hybrid baseline with auction/assignment (EVOL2 M4…M8, with __dbg tags) */
+/** Hybrid baseline with auction/assignment (with __dbg tags) */
 export const meta = { name: "HybridBaseline" };
 
 // Params are imported so CEM can overwrite them.

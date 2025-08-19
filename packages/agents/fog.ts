@@ -1,4 +1,4 @@
-/** Minimal fog-of-war & frontier selector for Busters (EVOL2 M3)
+/** Minimal fog-of-war & frontier selector for Busters (EVOL2)
  *  - Grid covers 16000x9000 with 400px cells => 40 x 23
  *  - Tracks last-visited tick per cell
  *  - Tracks a soft "ghost belief" heat value per cell (decays each tick)

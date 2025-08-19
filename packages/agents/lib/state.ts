@@ -1,4 +1,4 @@
-/** EVOL2 — M1: minimal shared state for the hybrid bot.
+/** EVOL2 — minimal shared state for the hybrid bot.
  *  - Coarse visit grid for frontier-style exploration under fog
  *  - Enemy last-seen tracking (pos, tick, carrying, stunCd)
  *  Keep it tiny and robust; we’ll extend later (ghost probs, priors, etc.).
