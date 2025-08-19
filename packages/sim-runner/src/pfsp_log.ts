@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const LOG_PATH = path.resolve(process.cwd(), 'artifacts/pfsp_log.jsonl');
+const DEFAULT_PATH = path.resolve(process.cwd(), 'artifacts/pfsp_log.jsonl');
+const LOG_PATH = path.resolve(process.env.PFSP_LOG_PATH || DEFAULT_PATH);
 
 function ensureFile() {
   const dir = path.dirname(LOG_PATH);

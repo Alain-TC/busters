@@ -132,6 +132,7 @@ function envFromSeed(s: number) {
 
 // ===== PFSP logging =====
 function pfspLogPath(opts: CEMOpts) {
+  if (process.env.PFSP_LOG_PATH) return path.resolve(process.env.PFSP_LOG_PATH);
   return path.resolve(process.cwd(), opts.artifactsDir, 'pfsp_log.jsonl');
 }
 function logPFSPPick(opts: CEMOpts, entry: any) {

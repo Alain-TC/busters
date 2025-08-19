@@ -1,17 +1,43 @@
 import fs from 'fs';
 import path from 'path';
 
+const args = process.argv.slice(2);
+let explicitLog: string | undefined;
+let sinceStr: string | undefined;
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === '--since') {
+    sinceStr = args[++i];
+  } else if (!a.startsWith('--') && !explicitLog) {
+    explicitLog = a;
+  } else {
+    console.error('pfsp-report: unknown arg', a);
+    process.exit(1);
+  }
+}
+
+let since: number | null = null;
+if (sinceStr) {
+  const t = Date.parse(sinceStr);
+  if (Number.isNaN(t)) {
+    console.error('pfsp-report: invalid --since timestamp');
+    process.exit(1);
+  }
+  since = t;
+}
+
 const candidates = [
   path.resolve('packages/sim-runner/artifacts/pfsp_log.jsonl'),
   path.resolve('artifacts/pfsp_log.jsonl'),
 ];
-const logPath = candidates.find(p => fs.existsSync(p));
+const logPath = explicitLog ? path.resolve(explicitLog) : candidates.find(p => fs.existsSync(p));
 if (!logPath) {
-  console.error('pfsp-report: no PFSP log found at', candidates.join(' or '));
+  console.error('pfsp-report: no PFSP log found at', [explicitLog, ...candidates].join(' or '));
   process.exit(1);
 }
 
 type Row = {
+  ts?: string;
   type: 'pick' | 'result';
   oppId?: string;
   opp?: { type:'module'|'genome'; spec?:string; tag?:string };
@@ -22,10 +48,17 @@ function deriveId(r: Row) {
   return r.oppId ?? (r.opp?.type === 'module' ? r.opp?.spec : r.opp?.tag);
 }
 
-const rows: Row[] = fs.readFileSync(logPath, 'utf-8')
+let rows: Row[] = fs.readFileSync(logPath, 'utf-8')
   .split('\n').map(s => s.trim()).filter(Boolean)
   .map(s => { try { return JSON.parse(s) as Row; } catch { return {} as Row; } })
   .filter(r => r && (r.type === 'pick' || r.type === 'result'));
+
+if (since !== null) {
+  rows = rows.filter(r => {
+    const ts = Date.parse(r.ts || '');
+    return !Number.isNaN(ts) && ts >= since!;
+  });
+}
 
 type Acc = { id:string; picks:number; results:number; W:number; D:number; L:number; diffSum:number; };
 const byId = new Map<string, Acc>();
