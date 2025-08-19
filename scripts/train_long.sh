@@ -13,6 +13,7 @@ OPP_POOL="greedy,random,camper,stunner"
 ART_DIR="packages/sim-runner/artifacts"
 RESET_ELO=0
 TAG="run"
+SUBJECT="hybrid"
 
 # ========= Args =========
 while [[ $# -gt 0 ]]; do
@@ -27,6 +28,7 @@ while [[ $# -gt 0 ]]; do
     --opp-pool) OPP_POOL="$2"; shift 2 ;;
     --reset-elo) RESET_ELO=1; shift ;;
     --tag) TAG="$2"; shift 2 ;;
+    --subject) SUBJECT="$2"; shift 2 ;;
     -h|--help)
       cat <<USAGE
 Usage: scripts/train_long.sh [options]
@@ -40,6 +42,7 @@ Options:
   --hof N              Hall-of-Fame size (default: $HOF)
   --jobs N|auto        parallel workers (default: auto)
   --opp-pool list      comma list of opponents (default: $OPP_POOL)
+  --subject NAME       training subject (default: $SUBJECT)
   --reset-elo          delete Elo + PFSP logs before training
   --tag NAME           label for saved outputs (default: $TAG)
   -h, --help           show this help
@@ -71,7 +74,7 @@ fi
 
 echo ">> Starting training"
 echo "   pop=$POP gens=$GENS seedsPer=$SEEDS_PER epsPerSeed=$EPS_PER_SEED jobs=$JOBS seed=$SEED"
-echo "   oppPool=$OPP_POOL hof=$HOF"
+echo "   oppPool=$OPP_POOL hof=$HOF subject=$SUBJECT"
 
 # ========= Train =========
 pnpm -C packages/sim-runner start train \
@@ -80,7 +83,8 @@ pnpm -C packages/sim-runner start train \
   --seeds-per "$SEEDS_PER" --eps-per-seed "$EPS_PER_SEED" \
   --jobs "$JOBS" --seed "$SEED" \
   --opp-pool "$OPP_POOL" \
-  --hof "$HOF"
+  --hof "$HOF" \
+  --subject "$SUBJECT"
 
 # ========= Reports =========
 echo ">> PFSP report"
