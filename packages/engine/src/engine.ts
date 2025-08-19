@@ -54,6 +54,11 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     lastSeenTickForGhost: { ...state.lastSeenTickForGhost }
   };
 
+  const busterById = new Map<number, BusterPublicState>();
+  next.busters.forEach(b => busterById.set(b.id, b));
+  const ghostById = new Map<number, GhostState>();
+  next.ghosts.forEach(g => ghostById.set(g.id, g));
+
   // Keep "start-of-tick" facts for edge rules
   const startCarry = new Map<number, number | null>(); // busterId -> ghostId if carrying
   const startStates = new Map<number, number>();       // busterId -> state at start
@@ -110,7 +115,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       next.scores[base] += 1; // scoring on drop in base (attacker or victim)
       // no ghost added back to the map
     } else {
-      next.ghosts.push({ id: ghostId, x: b.x, y: b.y, endurance: 0, engagedBy: 0 });
+      const ghost = { id: ghostId, x: b.x, y: b.y, endurance: 0, engagedBy: 0 };
+      next.ghosts.push(ghost);
+      ghostById.set(ghostId, ghost);
       dropped.add(ghostId);
     }
     // clear carry flag on this buster (keep stunned if applicable)
@@ -121,7 +128,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   for (const b of next.busters) {
     const a = intents.get(b.id);
     if (a?.type === 'STUN' && b.stunCd <= 0) {
-      const target = next.busters.find(bb => bb.id === a.busterId);
+      const target = busterById.get(a.busterId);
       if (target && target.teamId !== b.teamId) {
         const d = dist(b.x, b.y, target.x, target.y);
         if (d <= RULES.STUN_RANGE) {
@@ -161,7 +168,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
           b.state = 0; b.value = 0;
         } else {
           // drop to ground (no score)
-          next.ghosts.push({ id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 });
+          const ghost = { id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 };
+          next.ghosts.push(ghost);
+          ghostById.set(gid, ghost);
           b.state = 0; b.value = 0;
         }
       }
@@ -169,7 +178,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     if (a?.type === 'EJECT') {
       if (b.state === 1) {
         const gid = b.value as number;
-        next.ghosts.push({ id: gid, x: a.x, y: a.y, endurance: 0, engagedBy: 0 });
+        const ghost = { id: gid, x: a.x, y: a.y, endurance: 0, engagedBy: 0 };
+        next.ghosts.push(ghost);
+        ghostById.set(gid, ghost);
         b.state = 0; b.value = 0;
       }
     }
@@ -182,7 +193,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       const gid = startCarry.get(b.id)!;
       // force no score even if inside base: it's an escape, not a release
       if (!dropped.has(gid)) {
-        next.ghosts.push({ id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 });
+        const ghost = { id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 };
+        next.ghosts.push(ghost);
+        ghostById.set(gid, ghost);
         dropped.add(gid);
       }
       // clear carry
@@ -197,7 +210,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   for (const b of next.busters) {
     const a = intents.get(b.id);
     if (a?.type === 'BUST') {
-      const g = next.ghosts.find(gg => gg.id === a.ghostId);
+      const g = ghostById.get(a.ghostId);
       if (!g) continue;
       const d = dist(b.x, b.y, g.x, g.y);
       if (d >= RULES.BUST_MIN && d <= RULES.BUST_MAX) {
@@ -237,7 +250,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   if (captured.length) {
     for (const c of captured) {
       next.ghosts = next.ghosts.filter(g => g.id !== c.ghostId);
-      const carrier = next.busters.find(b => b.id === c.takerBusterId);
+      ghostById.delete(c.ghostId);
+      const carrier = busterById.get(c.takerBusterId);
       if (carrier) { carrier.state = 1; carrier.value = c.ghostId; }
     }
   }
