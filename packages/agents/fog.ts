@@ -12,9 +12,10 @@
  *   - pickFrontierTarget(from: {x,y}): {x,y}
  */
 
+import { MAP_W, MAP_H } from "@busters/shared";
 type Pt = { x: number; y: number };
 
-const W = 16000, H = 9000;
+const W = MAP_W - 1, H = MAP_H - 1;
 const CELL = 400;
 const GX = Math.ceil(W / CELL); // 40
 const GY = Math.ceil(H / CELL); // 23

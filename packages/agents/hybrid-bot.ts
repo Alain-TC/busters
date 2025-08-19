@@ -5,6 +5,7 @@ export const meta = { name: "HybridBaseline" };
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
 import { HybridState, getState } from "./lib/state";
+import { MAP_W, MAP_H } from "@busters/shared";
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -20,7 +21,7 @@ const TUNE = TUNE_IN;
 const WEIGHTS = WEIGHTS_IN as any;
 
 /** --- Small utils (no imports) --- */
-const W = 16000, H = 9000;
+const W = MAP_W - 1, H = MAP_H - 1;
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
 

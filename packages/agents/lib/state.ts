@@ -4,9 +4,11 @@
  *  Keep it tiny and robust; we’ll extend later (ghost probs, priors, etc.).
  */
 
+import { MAP_W as MAP_W_CONST, MAP_H as MAP_H_CONST } from "@busters/shared";
+
 export type Pt = { x: number; y: number };
 
-const MAP_W = 16000, MAP_H = 9000; // safe defaults
+const MAP_W = MAP_W_CONST - 1, MAP_H = MAP_H_CONST - 1; // safe defaults
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 function centerOfCell(cx: number, cy: number, cellW: number, cellH: number): Pt {
   return { x: cx * cellW + cellW / 2, y: cy * cellH + cellH / 2 };

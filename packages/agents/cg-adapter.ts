@@ -11,10 +11,11 @@ declare function readline(): string;
 declare function print(s: string): void;
 
 import { act } from "./hybrid-bot";
+import { MAP_W, MAP_H } from "@busters/shared";
 
 type Pt = { x: number; y: number };
 
-const W = 16000, H = 9000;
+const W = MAP_W - 1, H = MAP_H - 1;
 let tick = 0;
 
 // Track which of our busters already used RADAR (simple local memory)

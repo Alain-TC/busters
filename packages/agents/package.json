@@ -16,6 +16,9 @@
     "./hybrid-bot": "./hybrid-bot.ts",
     "./hof": "./hof.ts"
   },
+  "dependencies": {
+    "@busters/shared": "workspace:*"
+  },
   "devDependencies": {
     "esbuild": "^0.25.9"
   },
