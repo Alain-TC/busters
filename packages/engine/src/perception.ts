@@ -1,6 +1,6 @@
 import { GameState, Observation, TeamId } from '@busters/shared';
 import { RULES, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
-import { dist } from '@busters/shared';
+import { dist2 } from '@busters/shared';
 
 export function observationsForTeam(state: GameState, teamId: TeamId): Observation[] {
   const res: Observation[] = [];
@@ -11,20 +11,35 @@ export function observationsForTeam(state: GameState, teamId: TeamId): Observati
   for (const me of my) {
     const hasRadarVision = !!state.radarNextVision[me.id];
     const vision = hasRadarVision ? RULES.RADAR_VISION : RULES.VISION;
-    const ghosts = state.ghosts
-      .filter(g => dist(me.x, me.y, g.x, g.y) <= vision)
-      .map(g => ({ id: g.id, x: g.x, y: g.y, range: dist(me.x, me.y, g.x, g.y), endurance: g.endurance }))
-      .sort((a, b) => a.range - b.range);
+    const vision2 = vision * vision;
 
-    const allies = my
-      .filter(b => b.id !== me.id && dist(me.x, me.y, b.x, b.y) <= vision)
-      .map(b => ({ id: b.id, x: b.x, y: b.y, range: dist(me.x, me.y, b.x, b.y), stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined }))
-      .sort((a, b) => a.range - b.range);
+    const ghosts: { id: number; x: number; y: number; range: number; endurance: number }[] = [];
+    for (const g of state.ghosts) {
+      const d2 = dist2(me.x, me.y, g.x, g.y);
+      if (d2 <= vision2) {
+        ghosts.push({ id: g.id, x: g.x, y: g.y, range: Math.sqrt(d2), endurance: g.endurance });
+      }
+    }
+    ghosts.sort((a, b) => a.range - b.range);
 
-    const enemies = opp
-      .filter(b => dist(me.x, me.y, b.x, b.y) <= vision)
-      .map(b => ({ id: b.id, x: b.x, y: b.y, range: dist(me.x, me.y, b.x, b.y), stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined }))
-      .sort((a, b) => a.range - b.range);
+    const allies: { id: number; x: number; y: number; range: number; stunnedFor: number; carrying?: number }[] = [];
+    for (const b of my) {
+      if (b.id === me.id) continue;
+      const d2 = dist2(me.x, me.y, b.x, b.y);
+      if (d2 <= vision2) {
+        allies.push({ id: b.id, x: b.x, y: b.y, range: Math.sqrt(d2), stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined });
+      }
+    }
+    allies.sort((a, b) => a.range - b.range);
+
+    const enemies: { id: number; x: number; y: number; range: number; stunnedFor: number; carrying?: number }[] = [];
+    for (const b of opp) {
+      const d2 = dist2(me.x, me.y, b.x, b.y);
+      if (d2 <= vision2) {
+        enemies.push({ id: b.id, x: b.x, y: b.y, range: Math.sqrt(d2), stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined });
+      }
+    }
+    enemies.sort((a, b) => a.range - b.range);
 
     res.push({
       tick: state.tick,
