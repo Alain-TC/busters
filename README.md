@@ -1,12 +1,12 @@
-# Busters — CEM-Trained Codingame Bot (Monorepo)
+# Busters — CEM-Trained CodinGame Bot (Monorepo)
 
-Evolves a [Codingame "Busters"](https://www.codingame.com/multiplayer/bot-programming/busters) bot using the **Cross-Entropy Method (CEM)**. Trains against a pool of opponents and exports a single-file bot (`readline()` loop) compatible with the Codingame IDE.
+Evolves a [CodinGame "Busters"](https://www.codingame.com/multiplayer/bot-programming/busters) bot using the **Cross-Entropy Method (CEM)**. Trains against a pool of opponents and exports a single-file bot (`readline()` loop) compatible with the CodinGame IDE.
 
 ## Table of Contents
 - [Current Status](#current-status)
 - [Repository Structure](#repository-structure)
 - [Quick Start](#quick-start)
-- [Export a Codingame Bot](#export-a-codingame-bot)
+- [Export a CodinGame Bot](#export-a-codingame-bot)
 - [Run Local Tournaments](#run-local-tournaments)
 - [View Replays](#view-replays)
 - [Troubleshooting](#troubleshooting)
@@ -17,7 +17,7 @@ Evolves a [Codingame "Busters"](https://www.codingame.com/multiplayer/bot-progra
 - Parallel training ✅
 - Best genome example: `{ "radarTurn": 23, "stunRange": 1766, "releaseDist": 1600 }`
 - Fitness ≈ 2.28
-- Exporter writes `my_cg_bot.js`
+- Exporter writes `agents/codingame-bot.js`
 - Tournament works (`greedy`, `random`, `evolved` resolved correctly)
 
 ## Repository Structure
@@ -28,8 +28,7 @@ engine/           # core simulation: state, step, perception, scoring
 shared/           # constants, RNG, types, vector helpers
 sim-runner/       # training + tournaments (CEM, PFSP/Elo, workers, artifacts)
 viewer/           # Vite replay viewer (reads JSON from public/replays/)
-scripts/
-export-cg-bot.ts  # exports Codingame bot -> my_cg_bot.js
+scripts/          # export helpers & reports
 ```
 
 ## Quick Start
@@ -37,7 +36,6 @@ export-cg-bot.ts  # exports Codingame bot -> my_cg_bot.js
 ### Install
 ```bash
 pnpm install
-pnpm add -w -D tsx
 ```
 
 ### Smoke Train
@@ -60,14 +58,16 @@ pnpm -C packages/sim-runner start train \
   --hof 5
 ```
 
-## Export a Codingame Bot
-Generate a single-file `my_cg_bot.js` (no imports; uses `readline()` + `console.log()`):
+## Export a CodinGame Bot
+Generate a single-file `agents/codingame-bot.js` (no imports; uses `readline()` + `console.log()`):
 
 ```bash
-pnpm make:cg
+pnpm cg:export:genome   # best genome → agents/codingame-bot.js
+pnpm cg:export:hybrid   # baseline hybrid bot
+pnpm cg:export:champ    # champion from tournament standings
 ```
 
-The exporter reads `packages/sim-runner/artifacts/simrunner_best_genome.json` (or `artifacts/simrunner_best_genome.json` fallback). If not found, it falls back to a known good genome. Paste the resulting `my_cg_bot.js` into the Codingame IDE.
+`cg:export:genome` reads `packages/sim-runner/artifacts/simrunner_best_genome.json` (or `artifacts/simrunner_best_genome.json` if present). `cg:export:champ` picks the top entry in `packages/sim-runner/artifacts/tournament_standings.json`. Paste the resulting `agents/codingame-bot.js` into the CodinGame IDE.
 
 ## Run Local Tournaments
 Short names `greedy`, `random`, `evolved` are resolved by the loader to absolute file paths.
@@ -91,14 +91,14 @@ pnpm -C packages/viewer dev
 
 ## Troubleshooting
 
-- **`tsx: command not found`**  
-  Install at workspace root:
+- **`tsx: command not found`**
+  Ensure dependencies are installed:
   ```bash
-  pnpm add -w -D tsx
+  pnpm install
   ```
-- **Tourney: Cannot find package 'packages' imported from .../loadBots.ts**  
+- **Tourney: Cannot find package 'packages' imported from .../loadBots.ts**
   Ensure the loader maps short names to absolute file paths (already fixed here).
-- **CG bot runs locally but not in IDE**  
+- **CG bot runs locally but not in IDE**
   Check that the export is a single file, uses `readline()`/`console.log()`, and prints exactly one action per buster each turn.
 
 ## Roadmap
