@@ -40,7 +40,14 @@ importers:
         specifier: ^4.16.2
         version: 4.20.4
 
-  packages/shared: {}
+  packages/shared:
+    devDependencies:
+      tsx:
+        specifier: ^4.20.4
+        version: 4.20.4
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.2
 
   packages/sim-runner:
     dependencies:
