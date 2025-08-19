@@ -26,19 +26,13 @@ importers:
       '@busters/shared':
         specifier: workspace:*
         version: link:../shared
-
-  packages/evolve:
-    dependencies:
-      '@busters/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@busters/sim-runner':
-        specifier: workspace:*
-        version: link:../sim-runner
     devDependencies:
       tsx:
-        specifier: ^4.16.2
+        specifier: ^4.20.4
         version: 4.20.4
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.2
 
   packages/shared:
     devDependencies:
