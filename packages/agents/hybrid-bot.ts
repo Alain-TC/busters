@@ -4,6 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
+import { estimateInterceptPoint, duelStunDelta, contestedBustDelta, releaseBlockDelta } from "./micro";
 
 // Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
 const fog = new Fog();
@@ -113,9 +114,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
   // INTERCEPT enemy carriers
   for (const e of enemies) {
     if (e.state === 1) {
-      const tx = Math.round((e.x + MY.x) / 2);
-      const ty = Math.round((e.y + MY.y) / 2);
-      tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
+      const ip = estimateInterceptPoint(meObs.self, e, MY);
+      tasks.push({ type: "INTERCEPT", target: ip, payload: { enemy: e }, baseScore: WEIGHTS.INTERCEPT_BASE });
     }
   }
 
@@ -166,24 +166,52 @@ const pMem = new Map<number, { wp: number }>();
 function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
-function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt): number {
-  const d = dist(b.x, b.y, t.target.x, t.target.y);
+function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): number {
+  let target = t.target;
+  if (t.type === "INTERCEPT" && t.payload?.enemy) {
+    target = estimateInterceptPoint(b, t.payload.enemy, MY);
+  }
+  const d = dist(b.x, b.y, target.x, target.y);
   let s = t.baseScore - d * WEIGHTS.DIST_PEN;
 
-  if (t.type === "INTERCEPT") s -= d * WEIGHTS.INTERCEPT_DIST_PEN;
+  if (t.type === "INTERCEPT" && t.payload?.enemy) {
+    s -= d * WEIGHTS.INTERCEPT_DIST_PEN;
+    s += releaseBlockDelta({ blocker: b, carrier: t.payload.enemy, myBase: MY, stunRange: TUNE.STUN_RANGE });
+    s += duelStunDelta({
+      me: b,
+      enemy: t.payload.enemy,
+      canStunMe: M(b.id).stunReadyAt <= tick,
+      canStunEnemy: (t.payload.enemy.state !== 2),
+      stunRange: TUNE.STUN_RANGE,
+    });
+  }
+
   if (t.type === "BUST") {
     const r = dist(b.x, b.y, t.target.x, t.target.y);
     if (r >= BUST_MIN && r <= BUST_MAX) s += WEIGHTS.BUST_RING_BONUS * 0.5;
+    s += contestedBustDelta({
+      me: b,
+      ghost: t.target,
+      enemies,
+      bustMin: BUST_MIN,
+      bustMax: BUST_MAX,
+      stunRange: TUNE.STUN_RANGE,
+      canStunMe: M(b.id).stunReadyAt <= tick,
+    });
   }
   if (t.type === "DEFEND") {
     const near = enemies.filter(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS).length;
     s += near * 1.5;
   }
+  if (t.type === "BLOCK") {
+    const carrier = enemies.find(e => e.state === 1);
+    if (carrier) s += releaseBlockDelta({ blocker: b, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
+  }
   return s;
 }
 
 /** Greedy auction: assigns at most one task per buster (fast & fine here) */
-function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt): Map<number, Task> {
+function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number): Map<number, Task> {
   const assigned = new Map<number, Task>();
   const freeB = new Set(team.map(b => b.id));
   const freeT = new Set(tasks.map((_, i) => i));
@@ -192,7 +220,7 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt): Map<num
   const S: { b: number; t: number; s: number }[] = [];
   for (let bi = 0; bi < team.length; bi++) {
     for (let ti = 0; ti < tasks.length; ti++) {
-      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY) });
+      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick) });
     }
   }
   S.sort((a, b) => b.s - a.s);
@@ -252,8 +280,17 @@ export function act(ctx: Ctx, obs: Obs) {
     targetEnemy = enemies[0];
   }
   if (canStun && targetEnemy) {
-    mem.get(me.id)!.stunReadyAt = tick + STUN_CD;
-    return dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat");
+    const delta = duelStunDelta({
+      me,
+      enemy: targetEnemy,
+      canStunMe: canStun,
+      canStunEnemy: (targetEnemy.state !== 2),
+      stunRange: TUNE.STUN_RANGE,
+    });
+    if (delta > 0) {
+      mem.get(me.id)!.stunReadyAt = tick + STUN_CD;
+      return dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat");
+    }
   }
 
   // Scheduled RADAR (staggered)
@@ -274,7 +311,7 @@ export function act(ctx: Ctx, obs: Obs) {
   if (planTick !== tick) {
     const team = friends; // includes self
     const tasks = buildTasks(ctx, obs, MY, EN);
-    planAssign = runAuction(team, tasks, enemies, MY);
+    planAssign = runAuction(team, tasks, enemies, MY, tick);
     planTick = tick;
   }
 
@@ -292,8 +329,10 @@ export function act(ctx: Ctx, obs: Obs) {
     }
 
     if (myTask.type === "INTERCEPT") {
-      const tgt = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "midpoint");
+      const enemy: Ent | undefined = myTask.payload?.enemy;
+      const ip = enemy ? estimateInterceptPoint(me, enemy, MY) : myTask.target;
+      const tgt = spacedTarget(me, ip, friends);
+      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", enemy ? "micro" : "midpoint");
     }
 
     if (myTask.type === "DEFEND") {
