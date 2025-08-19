@@ -36,6 +36,12 @@ export class Fog {
     for (let i = 0; i < this.last.length; i++) this.last[i] = -1;
   }
 
+  reset() {
+    this.tick = 0;
+    this.last.fill(-1);
+    this.heat.fill(0);
+  }
+
   beginTick(t: number) {
     if (t === this.tick) return;
     this.tick = t;

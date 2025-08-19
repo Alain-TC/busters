@@ -2,6 +2,7 @@
 
 import type { BotModule } from "../types"; // If you don't have this, replace BotModule with: { meta?: any; act: Function }
 import { TUNE as BASE_TUNE, WEIGHTS as BASE_WEIGHTS } from "@busters/agents/hybrid-params";
+import { Fog } from "@busters/agents/fog";
 
 /** The flat param order (19 dims) used by CEM for Hybrid */
 export const ORDER = [
@@ -122,6 +123,7 @@ export function defaultSigmas(): number[] {
 export function makeHybridBotFromTW(tw: TW): BotModule {
   const TUNE = tw.TUNE;
   const WEIGHTS = tw.WEIGHTS;
+  const fog = new Fog();
 
   // --- inline utils
   const W = 16000, H = 9000;
@@ -277,7 +279,8 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       const me = obs.self;
       const m = M(me.id);
       const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
-
+      if (tick <= 1) fog.reset();
+      
       const { my: MY, enemy: EN } = resolveBases(ctx);
       const enemies = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
       const ghosts  = (obs.ghostsVisible ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
