@@ -7,6 +7,8 @@
 export type Pt = { x: number; y: number };
 
 const MAP_W = 16000, MAP_H = 9000; // safe defaults
+// How long to remember enemies (in ticks) before dropping them
+export const DEFAULT_ENEMY_MAX_AGE = 40;
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 function centerOfCell(cx: number, cy: number, cellW: number, cellH: number): Pt {
   return { x: cx * cellW + cellW / 2, y: cy * cellH + cellH / 2 };
@@ -30,8 +32,14 @@ export class HybridState {
 
   // Enemy last-seen
   enemies = new Map<number, EnemySeen>();
+  enemyMaxAge: number;
 
-  constructor(bounds?: { w?: number; h?: number }, cols = 8, rows = 5) {
+  constructor(
+    bounds?: { w?: number; h?: number },
+    cols = 8,
+    rows = 5,
+    enemyMaxAge = DEFAULT_ENEMY_MAX_AGE
+  ) {
     const W = bounds?.w ?? MAP_W;
     const H = bounds?.h ?? MAP_H;
     this.cols = cols;
@@ -39,6 +47,7 @@ export class HybridState {
     this.cellW = W / cols;
     this.cellH = H / rows;
     this.visits = Array(cols * rows).fill(0);
+    this.enemyMaxAge = enemyMaxAge;
   }
 
   private idxFromPoint(p: Pt): number {
@@ -62,6 +71,12 @@ export class HybridState {
     return centerOfCell(cx, cy, this.cellW, this.cellH);
   }
 
+  pruneEnemies(currentTick: number, maxAge = this.enemyMaxAge) {
+    for (const [id, e] of this.enemies) {
+      if (currentTick - e.lastTick > maxAge) this.enemies.delete(id);
+    }
+  }
+
   trackEnemies(enemies?: any[], tick?: number) {
     if (!enemies) return;
     for (const e of enemies) {
@@ -74,6 +89,7 @@ export class HybridState {
         stunCd: e.stunCd
       });
     }
+    if (tick !== undefined) this.pruneEnemies(tick);
   }
 }
 
