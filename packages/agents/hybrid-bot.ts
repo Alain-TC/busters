@@ -140,14 +140,22 @@ function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
     tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
-  // EXPLORE: next waypoints from patrols (one per teammate)
+  // EXPLORE: fog frontier target per teammate (fallback to patrols)
   const team = uniqTeam(meObs.self, meObs.friends);
+  const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
-    const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
-    const Mx = MPatrol(mate.id);
-    const path = PATROLS[idx];
-    const wp = Mx.wp % path.length;
-    tasks.push({ type: "EXPLORE", target: path[wp], payload: { id: mate.id, wp }, baseScore: WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD });
+    let target: Pt | undefined;
+    const payload: any = { id: mate.id };
+    if (!early) target = fog.pickFrontierTarget(mate);
+    if (!target) {
+      const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
+      const Mx = MPatrol(mate.id);
+      const path = PATROLS[idx];
+      const wp = Mx.wp % path.length;
+      target = path[wp];
+      payload.wp = wp;
+    }
+    tasks.push({ type: "EXPLORE", target: target!, payload, baseScore: WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD });
   }
 
   return tasks;
@@ -206,10 +214,16 @@ export function act(ctx: Ctx, obs: Obs) {
   const m = M(me.id);
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
 
+  fog.beginTick(tick);
+  const friends = uniqTeam(me, obs.friends);
+  for (const f of friends) fog.markVisited(f);
+
   const { my: MY, enemy: EN } = resolveBases(ctx);
   const enemies = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
   const ghosts  = (obs.ghostsVisible ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
-  const friends = uniqTeam(me, obs.friends);
+
+  if (enemies.length || ghosts.length) fog.clearCircle(me, 2200);
+  for (const g of ghosts) fog.bumpGhost(g.x, g.y);
 
   const bpp = ctx.bustersPerPlayer ?? Math.max(3, friends.length || 3);
   (me as any).localIndex = (me as any).localIndex ?? (me.id % bpp);
@@ -244,8 +258,8 @@ export function act(ctx: Ctx, obs: Obs) {
 
   // Scheduled RADAR (staggered)
   if (!m.radarUsed && !stunned) {
-    if (localIdx === 0 && tick === TUNE.RADAR1_TURN) { m.radarUsed = true; return dbg({ type: "RADAR" }, "RADAR", "RADAR1_TURN"); }
-    if (localIdx === 1 && tick === TUNE.RADAR2_TURN) { m.radarUsed = true; return dbg({ type: "RADAR" }, "RADAR", "RADAR2_TURN"); }
+    if (localIdx === 0 && tick === TUNE.RADAR1_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return dbg({ type: "RADAR" }, "RADAR", "RADAR1_TURN"); }
+    if (localIdx === 1 && tick === TUNE.RADAR2_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return dbg({ type: "RADAR" }, "RADAR", "RADAR2_TURN"); }
   }
 
   // Bust immediately if already in ring
@@ -293,14 +307,18 @@ export function act(ctx: Ctx, obs: Obs) {
     }
 
     if (myTask.type === "EXPLORE") {
-      const mateId = myTask.payload?.id ?? me.id;
-      const Mx = MPatrol(mateId);
-      const path = PATROLS[((me as any).localIndex ?? 0) % PATROLS.length];
-      const cur = path[Mx.wp % path.length];
-      if (dist(me.x, me.y, cur.x, cur.y) < 800) Mx.wp = (Mx.wp + 1) % path.length;
-      const next = path[Mx.wp % path.length];
-      const P = spacedTarget(me, next, friends);
-      return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", `wp_${Mx.wp}`);
+      if (myTask.payload?.wp !== undefined) {
+        const mateId = myTask.payload?.id ?? me.id;
+        const Mx = MPatrol(mateId);
+        const path = PATROLS[((me as any).localIndex ?? 0) % PATROLS.length];
+        const cur = path[Mx.wp % path.length];
+        if (dist(me.x, me.y, cur.x, cur.y) < 800) Mx.wp = (Mx.wp + 1) % path.length;
+        const next = path[Mx.wp % path.length];
+        const P = spacedTarget(me, next, friends);
+        return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", `wp_${Mx.wp}`);
+      }
+      const P = spacedTarget(me, myTask.target, friends);
+      return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", "frontier");
     }
   }
 
