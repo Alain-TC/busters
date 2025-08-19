@@ -93,7 +93,19 @@ SUMMARY_FILE="$ART_DIR/pfsp_summary_${TS}_${TAG}.txt"
 pnpm pfsp:report "$PFSP_LOG" | tee "$SUMMARY_FILE"
 
 # ========= Artifacts / Exports =========
-BEST_GEN="$ART_DIR/simrunner_best_genome.json"
+case "$SUBJECT" in
+  hybrid)
+    BEST_ART="$ART_DIR/best_hybrid.json"
+    BEST_SNAP="$ART_DIR/best_hybrid.${TS}.${TAG}.json"
+    BEST_MSG="Best hybrid params snapshot"
+    ;;
+  *)
+    BEST_ART="$ART_DIR/simrunner_best_genome.json"
+    BEST_SNAP="$ART_DIR/simrunner_best_genome.${TS}.${TAG}.json"
+    BEST_MSG="Best genome snapshot"
+    ;;
+esac
+
 TOP_BOT="agents/evolved-bot.js"
 CG_BOT="agents/evolved-bot.cg.js"
 
@@ -108,9 +120,9 @@ else
   echo "WARN: $TOP_BOT not found — did training generate it?"
 fi
 
-if [[ -f "$BEST_GEN" ]]; then
-  cp "$BEST_GEN" "$ART_DIR/simrunner_best_genome.${TS}.${TAG}.json"
-  echo ">> Best genome snapshot -> $ART_DIR/simrunner_best_genome.${TS}.${TAG}.json"
+if [[ -f "$BEST_ART" ]]; then
+  cp "$BEST_ART" "$BEST_SNAP"
+  echo ">> $BEST_MSG -> $BEST_SNAP"
 fi
 
 echo
