@@ -1,10 +1,22 @@
+// packages/sim-runner/src/cli.ts
 import fs from 'fs';
 import path from 'path';
 import { loadBotModule } from './loadBots';
 import { runEpisodes } from './runEpisodes';
-import { trainCEM, compileGenomeToJS, buildBaseOppPool } from './ga';
 import { runRoundRobin } from './tournament';
 
+// Hybrid subject (EVOL2 M6+)
+import {
+  ORDER,
+  baselineVec,
+  twFromVec,
+  defaultSigmas,
+  makeHybridBotFromTW,
+} from './subjects';
+
+import { selectOpponentsPFSP } from './pfsp';
+
+/* --------------------- CLI helpers --------------------- */
 function getFlag(args: string[], name: string, def?: any) {
   const i = args.indexOf(`--${name}`);
   if (i >= 0) return args[i+1] ?? true;
@@ -15,6 +27,216 @@ function getBool(args: string[], name: string, def=false) {
   return i >= 0 ? true : def;
 }
 
+/* ---------------- RNG & math ---------------- */
+function mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gaussian(rng: () => number) {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ---------------- Opponent pool ---------------- */
+async function resolveOppPool(specList: string[]): Promise<Array<{name: string, bot: any}>> {
+  const mapNameToSpec = (n: string) => {
+    const k = n.trim();
+    if (k === 'greedy')  return '@busters/agents/greedy';
+    if (k === 'random')  return '@busters/agents/random';
+    if (k === 'stunner') return '@busters/agents/stunner';
+    if (k === 'camper')  return '@busters/agents/camper';
+    if (k === 'hybrid')  return '@busters/agents/hybrid';
+    if (k === 'hof')     return '@busters/agents/hof';
+    return k; // assume direct spec
+  };
+  const out: Array<{name: string, bot: any}> = [];
+  for (const n of specList) {
+    const spec = mapNameToSpec(n);
+    const bot = await loadBotModule(spec);
+    out.push({ name: n, bot });
+  }
+  return out;
+}
+
+/* ---------------- CEM for Hybrid ---------------- */
+type CemCfg = {
+  pop: number;
+  gens: number;
+  elitePct: number;
+  seedsPer: number;
+  episodesPerSeed: number;
+  seed: number;
+  jobs: number;
+  oppNames: string[];          // base pool names
+  pfsp?: boolean;              // if true, sub-select via PFSP each seed
+  pfspCount?: number;          // how many opps to select each seed (default 3)
+  artifactsDir: string;
+  logBest?: boolean;
+};
+
+async function evalHybridVector(
+  vec: number[],
+  oppsAll: Array<{name: string, bot: any}>,
+  seedsPer: number,
+  episodesPerSeed: number,
+  baseSeed: number,
+  usePFSP: boolean,
+  pfspCount: number
+) {
+  const tw = twFromVec(vec);
+  const botA = makeHybridBotFromTW(tw);
+
+  let games = 0, wins = 0, draws = 0, losses = 0;
+  let diffSum = 0;
+
+  for (let si = 0; si < seedsPer; si++) {
+    const s = baseSeed + si * 1013;
+
+    // PFSP sub-selection (by id) or full pool
+    let opps: Array<{name: string, bot: any}> = oppsAll;
+    if (usePFSP) {
+      const picked = selectOpponentsPFSP({
+        meId: 'hybrid',
+        candidates: oppsAll.map(o => o.name),
+        n: pfspCount,
+      }).map(p => p.id);
+      const set = new Set(picked);
+      opps = oppsAll.filter(o => set.has(o.name));
+      if (opps.length === 0) opps = oppsAll;
+    }
+
+    for (const opp of opps) {
+      const res = await runEpisodes({
+        seed: s,
+        episodes: episodesPerSeed,
+        bustersPerPlayer: 3,
+        ghostCount: 12,
+        botA,
+        botB: opp.bot,
+      });
+      const da = Number(res.scoreA) || 0;
+      const db = Number(res.scoreB) || 0;
+      diffSum += (da - db);
+      games += 1;
+      if (da > db) wins++; else if (da === db) draws++; else losses++;
+    }
+  }
+  const wr = (wins + 0.5 * draws) / Math.max(1, games);
+  const avgDiff = diffSum / Math.max(1, games);
+  const fit = 100 * wr + avgDiff;
+  return { fit, wr, avgDiff, tw };
+}
+
+async function trainHybridCEM(cfg: CemCfg) {
+  const {
+    pop, gens, elitePct, seedsPer, episodesPerSeed, seed,
+    oppNames, artifactsDir, pfsp = false, pfspCount = 3, logBest = false
+  } = cfg;
+
+  const DIM = ORDER.length;
+  const rng = mulberry32(seed >>> 0);
+
+  const oppsAll = await resolveOppPool(oppNames);
+  if (oppsAll.length === 0) throw new Error('No opponents resolved for training.');
+
+  let m = baselineVec();
+  let sig = defaultSigmas();
+  const eliteCount = Math.max(1, Math.floor(pop * elitePct));
+
+  fs.mkdirSync(path.resolve(artifactsDir), { recursive: true });
+  const logPath = path.resolve(artifactsDir, 'hybrid_cem_log.jsonl');
+  const outPath = path.resolve(artifactsDir, 'best_hybrid.json');
+
+  console.log(`Training CEM (subject=hybrid): dim=${DIM} pop=${pop} gens=${gens} seedsPer=${seedsPer} oppPool=${oppNames.join('+')}${pfsp ? ' [PFSP]' : ''}`);
+
+  let best = { fit: -Infinity, wr: 0, avgDiff: 0, tw: twFromVec(m) };
+
+  for (let g = 0; g < gens; g++) {
+    // Sample population
+    const popVecs: number[][] = [];
+    for (let i = 0; i < pop; i++) {
+      const v: number[] = [];
+      for (let d = 0; d < DIM; d++) {
+        const z = gaussian(rng);
+        v.push(m[d] + z * sig[d]);
+      }
+      popVecs.push(v);
+    }
+
+    // Evaluate
+    const evals = [];
+    for (let i = 0; i < pop; i++) {
+      const r = await evalHybridVector(popVecs[i], oppsAll, seedsPer, episodesPerSeed, seed + g * 10007 + i * 37, pfsp, pfspCount);
+      evals.push({ idx: i, ...r });
+    }
+    evals.sort((a, b) => b.fit - a.fit);
+
+    const head = evals[0];
+    if (head.fit > best.fit) best = head;
+    console.log(`CEM gen ${g}: bestFit=${head.fit.toFixed(2)} wr=${(head.wr*100).toFixed(1)}% m=[${Math.round(best.tw.TUNE.RELEASE_DIST)},${Math.round(best.tw.TUNE.STUN_RANGE)},${Math.round(best.tw.TUNE.RADAR1_TURN)}]`);
+    fs.appendFileSync(logPath, JSON.stringify({ gen: g, bestFit: head.fit, bestWR: head.wr, bestAvgDiff: head.avgDiff }) + "\n");
+    if (logBest) {
+      const bestTs = path.resolve(artifactsDir, `hybrid-params.gen${g}.ts`);
+      const ts = `export const TUNE = ${JSON.stringify(best.tw.TUNE, null, 2)} as const;\nexport const WEIGHTS = ${JSON.stringify(best.tw.WEIGHTS, null, 2)} as const;\nexport default { TUNE, WEIGHTS };\n`;
+      fs.writeFileSync(bestTs, ts);
+    }
+
+    // Update mean & sigma from elites
+    const elites = evals.slice(0, eliteCount);
+    for (let d = 0; d < DIM; d++) {
+      let sum = 0;
+      for (const e of elites) sum += popVecs[e.idx][d];
+      const newMean = sum / eliteCount;
+      m[d] = newMean;
+      let varSum = 0;
+      for (const e of elites) {
+        const dv = popVecs[e.idx][d] - newMean;
+        varSum += dv * dv;
+      }
+      const newStd = Math.sqrt(varSum / Math.max(1, eliteCount - 1));
+      sig[d] = clamp(0.5 * sig[d] + 0.5 * newStd, 1e-6, 1e6);
+    }
+  }
+
+  fs.writeFileSync(outPath, JSON.stringify({ TUNE: best.tw.TUNE, WEIGHTS: best.tw.WEIGHTS }, null, 2));
+  console.log(`Wrote best hybrid params -> ${outPath}`);
+
+  const outTs = path.resolve(artifactsDir, 'hybrid-params.best.ts');
+  const ts = `/** Auto-generated from CEM best_hybrid.json — do not edit by hand */\n` +
+             `export const TUNE = ${JSON.stringify(best.tw.TUNE, null, 2)} as const;\n\n` +
+             `export const WEIGHTS = ${JSON.stringify(best.tw.WEIGHTS, null, 2)} as const;\n` +
+             `export default { TUNE, WEIGHTS };\n`;
+  fs.writeFileSync(outTs, ts);
+  console.log(`Wrote -> ${outTs}`);
+
+  return best;
+}
+
+/* ---------------- Tag helpers for SIM replays ---------------- */
+function countTags(actions: any[]): Record<string, number> {
+  const c: Record<string, number> = {};
+  for (const a of actions || []) {
+    const t = a && a.__dbg && a.__dbg.tag;
+    if (!t) continue;
+    c[t] = (c[t] || 0) + 1;
+  }
+  return c;
+}
+function mergeCounts(a: Record<string, number>, b: Record<string, number>) {
+  const out: Record<string, number> = { ...a };
+  for (const k of Object.keys(b)) out[k] = (out[k] || 0) + b[k];
+  return out;
+}
+
+/* ---------------- Main CLI ---------------- */
 async function main() {
   const [,, mode, ...rest] = process.argv;
 
@@ -25,21 +247,50 @@ async function main() {
     const seed = Number(getFlag(rest, 'seed', 42));
     const replayPath = getFlag(rest, 'replay', null);
 
-    const botA = await loadBotModule(botAPath);
-    const botB = await loadBotModule(botBPath);
+    const baseA = await loadBotModule(botAPath);
+    const baseB = await loadBotModule(botBPath);
+
+    // --- RAW action capture per tick (preserves __dbg) ---
+    const rawByTick = new Map<number, { A: any[]; B: any[] }>();
+    function wrapBot(base: any, side: 'A' | 'B') {
+      return {
+        meta: base.meta,
+        act(ctx: any, obs: any) {
+          const a = base.act(ctx, obs);
+          const slot = rawByTick.get(ctx.tick) || { A: [], B: [] };
+          slot[side].push(a);
+          rawByTick.set(ctx.tick, slot);
+          return a;
+        }
+      };
+    }
+    const botA = wrapBot(baseA, 'A');
+    const botB = wrapBot(baseB, 'B');
 
     const frames: any[] = [];
     const onTick = replayPath ? (st: any) => {
-      frames.push({ tick: st.tick, width: st.width, height: st.height, busters: st.busters, ghosts: st.ghosts, scores: st.scores });
+      const raw = rawByTick.get(st.tick) || { A: [], B: [] };
+      const tagsA = countTags(raw.A);
+      const tagsB = countTags(raw.B);
+      const tagsCombined = mergeCounts(tagsA, tagsB);
+
+      frames.push({
+        tick: st.tick,
+        width: st.width, height: st.height,
+        busters: st.busters, ghosts: st.ghosts, scores: st.scores,
+        actionsA: raw.A, actionsB: raw.B,
+        tags: { A: tagsA, B: tagsB, combined: tagsCombined }
+      });
     } : undefined;
 
     const res = await runEpisodes({ seed, episodes, bustersPerPlayer: 3, ghostCount: 12, botA, botB, onTick } );
-    console.log(`A(${botA.meta?.name||'A'}) vs B(${botB.meta?.name||'B'}) ->`, res);
+    console.log(`A(${baseA.meta?.name||'A'}) vs B(${baseB.meta?.name||'B'}) ->`, res);
 
     if (replayPath) {
-      fs.mkdirSync(path.dirname(path.resolve(replayPath)), { recursive: true });
-      fs.writeFileSync(path.resolve(replayPath), JSON.stringify({ frames }, null, 2));
-      console.log(`Saved replay -> ${path.resolve(replayPath)}`);
+      const abs = path.resolve(replayPath);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, JSON.stringify({ frames }, null, 2));
+      console.log(`Saved replay -> ${abs}`);
     }
     return;
   }
@@ -51,57 +302,50 @@ async function main() {
     const algo = String(getFlag(rest, 'algo', 'cem'));
     const seedsPer = Number(getFlag(rest, 'seeds-per', 7));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
-    const jobs = Number(getFlag(rest, 'jobs', 1));
+    const jobs = Number(getFlag(rest, 'jobs', 1)); // reserved
     const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random'));
-    const hofSize = Number(getFlag(rest, 'hof', 5));
+    const subject = String(getFlag(rest, 'subject', '')).trim().toLowerCase();
+    const pfsp = getBool(rest, 'pfsp', false);
+    const pfspCount = Number(getFlag(rest, 'pfsp-count', 3));
+    const logBest = getBool(rest, 'log-best', false);
 
-    const baseOpps = await buildBaseOppPool();
-    const chosen: any[] = [];
-    const names = oppPoolArg.split(',').map(s=>s.trim()).filter(Boolean);
-    for (const n of names) {
-      const b = baseOpps.find(o => o.name === n);
-      if (b) chosen.push(b);
-    }
-    if (chosen.length === 0) chosen.push(...baseOpps);
-
-    console.log(`Training ${algo.toUpperCase()}: pop=${pop} gens=${gens} seedsPer=${seedsPer} oppPool=${names.join('+')||'greedy+random'}`);
-
-    if (algo === 'cem') {
-      const best = await trainCEM({
-        gens, pop,
-        elitePct: 0.2,
-        seedsPer,
-        episodesPerSeed,
-        oppPool: chosen,
-        hofSize,
-        seed,
+    if (subject === 'hybrid') {
+      if (algo !== 'cem') {
+        console.log(`Hybrid currently supports --algo cem only.`);
+        return;
+      }
+      const oppNames = oppPoolArg.split(',').map(s=>s.trim()).filter(Boolean);
+      await trainHybridCEM({
+        pop, gens, elitePct: 0.2,
+        seedsPer, episodesPerSeed,
+        seed, jobs,
+        oppNames,
         artifactsDir: 'artifacts',
-        jobs
+        pfsp, pfspCount,
+        logBest
       });
-      // CWD is packages/sim-runner when using -C
-      compileGenomeToJS('artifacts/simrunner_best_genome.json', '../agents/evolved-bot.js');
-      console.log('Best genome:', best);
       return;
     }
 
-    console.log(`Unknown algo: ${algo}. Try --algo cem`);
+    console.log(`Unknown or empty --subject. Use: --subject hybrid`);
+    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cem --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random --pfsp`);
     return;
   }
 
   if (mode === 'compile') {
     const inPath = String(getFlag(rest, 'in', 'artifacts/simrunner_best_genome.json'));
     const outPath = String(getFlag(rest, 'out', '../agents/evolved-bot.js'));
-    compileGenomeToJS(inPath, outPath);
+    console.log(`'compile' is for legacy genome flows; Hybrid emits artifacts/hybrid-params.best.ts instead.`);
     return;
   }
 
   if (mode === 'tourney') {
-    const botsArg = String(getFlag(rest, 'bots', '@busters/agents/greedy,@busters/agents/random,@busters/agents/evolved'));
+    const botsArg = String(getFlag(rest, 'bots', '@busters/agents/greedy,@busters/agents/random,@busters/agents/hybrid'));
     const seed = Number(getFlag(rest, 'seed', 123));
     const seedsPerPair = Number(getFlag(rest, 'seeds', 5));
     const episodesPerSeed = Number(getFlag(rest, 'episodes', 3));
     const replayDir = getFlag(rest, 'replay-dir', null);
-    const exportChamp = getFlag(rest, 'export-champ', null); // optional copy champion bot here
+    const exportChamp = getFlag(rest, 'export-champ', null);
     const standingsOut = getFlag(rest, 'out', 'artifacts/tournament_standings.json');
 
     const bots = botsArg.split(',').map((s, idx) => {
@@ -116,7 +360,6 @@ async function main() {
       replayDir: replayDir ? String(replayDir) : null
     });
 
-    // Rank by points then Elo
     const ranked = [...standings.bots].sort((a,b) => {
       const dp = (standings.points[b] - standings.points[a]);
       return dp !== 0 ? dp : (standings.elo[b] - standings.elo[a]);
@@ -129,12 +372,10 @@ async function main() {
     }
     console.log(`\nChampion: ${champ}`);
 
-    // Save standings
     fs.mkdirSync(path.dirname(path.resolve(standingsOut)), { recursive: true });
     fs.writeFileSync(path.resolve(standingsOut), JSON.stringify({ ranked, ...standings }, null, 2));
     console.log(`Saved -> ${path.resolve(standingsOut)}`);
 
-    // Optional: copy champion file if it was passed as a FILE path
     if (exportChamp) {
       const champSpec = bots.find(b => b.id === champ)!.spec;
       const looksLikeFile = champSpec.startsWith('./') || champSpec.startsWith('../') || champSpec.startsWith('/') || champSpec.startsWith('file:');
@@ -143,7 +384,7 @@ async function main() {
         fs.copyFileSync(abs, path.resolve(process.cwd(), String(exportChamp)));
         console.log(`Copied champion file -> ${path.resolve(process.cwd(), String(exportChamp))}`);
       } else {
-        console.log(`Champion is a package export; skipping copy. You can re-export it from a small wrapper if needed.`);
+        console.log(`Champion is a package export; skipping copy.`);
       }
     }
     return;
@@ -163,21 +404,18 @@ async function main() {
   }
 
   console.log(`Usage:
-  # Train (CEM)
-  tsx src/cli.ts train --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 [--opp-pool greedy,random,hof]
+  # Train Hybrid (CEM)
+  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random [--pfsp]
 
-  # Sim a single match (optional replay)
+  # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]
 
-  # Round-robin tournament (saves standings; optional per-pair replays)
-  tsx src/cli.ts tourney --bots @busters/agents/greedy,@busters/agents/random,@busters/agents/evolved \\
+  # Round-robin tournament
+  tsx src/cli.ts tourney --bots @busters/agents/greedy,@busters/agents/random,@busters/agents/hybrid \\
     --seed 123 --seeds 5 --episodes 3 \\
     [--replay-dir ../viewer/public/replays/tourney] \\
-    [--out artifacts/tournament_standings.json] \\
-    [--export-champ ../agents/champion-bot.js]
-
-  # Compile genome → single-file workspace bot
-  tsx src/cli.ts compile --in artifacts/simrunner_best_genome.json --out ../agents/evolved-bot.js
+    [--out artifacts/tournament_standings.json]
 `);
 }
 main();
+

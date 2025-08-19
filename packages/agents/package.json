@@ -8,6 +8,19 @@
     "./greedy": "./greedy-buster.js",
     "./evolved": "./evolved-bot.js",
     "./camper": "./camper-stunner.js",
-    "./stunner": "./aggro-chaser.js"
+    "./stunner": "./aggro-chaser.js",
+    "./hybrid": "./hybrid-bot.ts",
+    "./hybrid-params": "./hybrid-params.ts",
+    "./fog": "./fog.ts",
+    ".": "./index.ts",
+    "./hybrid-bot": "./hybrid-bot.ts",
+    "./hof": "./hof.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  },
+  "scripts": {
+    "build": "echo \"@busters/agents: nothing to build\"",
+    "build:cg": "esbuild cg-adapter.ts --bundle --format=iife --target=es2019 --outfile=dist/hybrid-cg.js"
   }
 }

@@ -1,121 +1,83 @@
-# from the repo root
-mkdir -p scripts
-cat > scripts/train_long.sh <<'BASH'
-#!/usr/bin/env bash
-set -euo pipefail
+cat > packages/agents/hybrid-bot.ts <<'TS'
+/** EVOL2 — Milestone M1: Hybrid with tiny POMDP scaffolding
+ *  - Uses a coarse visit grid for frontier exploration under fog
+ *  - Tracks enemy last-seen (pos, carrying, stunCd)
+ *  - Safe RADAR schedule (staggered), ring busting, carry→release
+ */
 
-# ========= Defaults =========
-POP=32
-GENS=40
-SEEDS_PER=6
-EPS_PER_SEED=3
-SEED=123
-HOF=8
-JOBS="auto"
-OPP_POOL="greedy,random,camper,stunner"
-ART_DIR="packages/sim-runner/artifacts"
-RESET_ELO=0
-TAG="run"
+export const meta = { name: "HybridBaseline", version: "M1" };
 
-# ========= Args =========
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --pop) POP="$2"; shift 2 ;;
-    --gens) GENS="$2"; shift 2 ;;
-    --seeds-per) SEEDS_PER="$2"; shift 2 ;;
-    --eps-per-seed|--eps) EPS_PER_SEED="$2"; shift 2 ;;
-    --seed) SEED="$2"; shift 2 ;;
-    --hof) HOF="$2"; shift 2 ;;
-    --jobs) JOBS="$2"; shift 2 ;;
-    --opp-pool) OPP_POOL="$2"; shift 2 ;;
-    --reset-elo) RESET_ELO=1; shift ;;
-    --tag) TAG="$2"; shift 2 ;;
-    -h|--help)
-      cat <<USAGE
-Usage: scripts/train_long.sh [options]
+import { HybridState, getState, Pt } from "./lib/state";
 
-Options:
-  --pop N              population size (default: $POP)
-  --gens N             generations (default: $GENS)
-  --seeds-per N        distinct base seeds per genome (default: $SEEDS_PER)
-  --eps-per-seed N     episodes per seed (default: $EPS_PER_SEED)
-  --seed N             master RNG seed (default: $SEED)
-  --hof N              Hall-of-Fame size (default: $HOF)
-  --jobs N|auto        parallel workers (default: auto)
-  --opp-pool list      comma list of opponents (default: $OPP_POOL)
-  --reset-elo          delete Elo + PFSP logs before training
-  --tag NAME           label for saved outputs (default: $TAG)
-  -h, --help           show this help
-USAGE
-      exit 0 ;;
-    *)
-      echo "Unknown option: $1" >&2; exit 1 ;;
-  esac
-done
+const MAP_W = 16000, MAP_H = 9000;
+function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
+function dist(a: Pt, b: Pt) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function clampPt(p: Pt): Pt { return { x: clamp(p.x, 0, MAP_W), y: clamp(p.y, 0, MAP_H) }; }
 
-# ========= Helpers =========
-cpu_count() {
-  if command -v nproc >/dev/null 2>&1; then nproc
-  elif command -v sysctl >/dev/null 2>&1; then sysctl -n hw.ncpu
-  else echo 8
-  fi
+function ringPoint(me: Pt, to: Pt, r: number): Pt {
+  const dx = me.x - to.x, dy = me.y - to.y;
+  const L = Math.hypot(dx, dy) || 1;
+  return clampPt({ x: to.x + (dx / L) * r, y: to.y + (dy / L) * r });
 }
 
-if [[ "$JOBS" == "auto" ]]; then JOBS="$(cpu_count)"; fi
-TS="$(date +%Y%m%d-%H%M%S)"
+function pickGhost(ghosts?: any[]) {
+  if (!ghosts || ghosts.length === 0) return undefined;
+  return ghosts.slice().sort((a, b) => a.range - b.range)[0];
+}
 
-# ========= Prep =========
-mkdir -p "$ART_DIR"
+function pickStunTarget(enemies?: any[], maxRange = 1760) {
+  if (!enemies || enemies.length === 0) return undefined;
+  const inRange = enemies.filter(e => e.range !== undefined && e.range <= maxRange);
+  const carriers = inRange.filter(e => e.carrying !== undefined);
+  return (carriers[0] ?? inRange[0]);
+}
 
-if [[ "$RESET_ELO" == "1" ]]; then
-  echo ">> Resetting Elo & PFSP logs in $ART_DIR"
-  rm -f "$ART_DIR/elo.json" "$ART_DIR/pfsp_log.jsonl"
-fi
+export function act(ctx: any, obs: any) {
+  const self = obs.self as Pt & { id: number; stunCd: number; radarUsed: boolean; carrying?: any };
+  const myBase: Pt = ctx?.myBase ?? { x: 0, y: 0 };
 
-echo ">> Starting training"
-echo "   pop=$POP gens=$GENS seedsPer=$SEEDS_PER epsPerSeed=$EPS_PER_SEED jobs=$JOBS seed=$SEED"
-echo "   oppPool=$OPP_POOL hof=$HOF"
+  // State (visits + enemy last-seen)
+  const S: HybridState = getState(ctx, obs);
+  S.touchVisit(self);
+  S.trackEnemies(obs.enemies, obs.tick);
 
-# ========= Train =========
-pnpm -C packages/sim-runner start train \
-  --algo cem \
-  --pop "$POP" --gens "$GENS" \
-  --seeds-per "$SEEDS_PER" --eps-per-seed "$EPS_PER_SEED" \
-  --jobs "$JOBS" --seed "$SEED" \
-  --opp-pool "$OPP_POOL" \
-  --hof "$HOF"
+  // 1) If carrying, return and release
+  if (self.carrying !== undefined) {
+    const d = dist(self, myBase);
+    if (d <= 1520) return { type: "RELEASE" }; // 1600 safety minus a small margin
+    return { type: "MOVE", x: myBase.x, y: myBase.y };
+  }
 
-# ========= Reports =========
-echo ">> PFSP report"
-SUMMARY_FILE="$ART_DIR/pfsp_summary_${TS}_${TAG}.txt"
-pnpm pfsp:report | tee "$SUMMARY_FILE"
+  // 2) STUN: enemy carrier (or any in range) when ready
+  const stunTarget = pickStunTarget(obs.enemies, 1760);
+  if (stunTarget && (self as any).stunCd <= 0) {
+    return { type: "STUN", busterId: stunTarget.id };
+  }
 
-# ========= Artifacts / Exports =========
-BEST_GEN="$ART_DIR/simrunner_best_genome.json"
-TOP_BOT="agents/evolved-bot.js"
-CG_BOT="agents/evolved-bot.cg.js"
+  // 3) Ghost: bust inside ring; else move to ~1200 ring
+  const g = pickGhost(obs.ghostsVisible);
+  if (g) {
+    if (g.range >= 900 && g.range <= 1760) {
+      return { type: "BUST", ghostId: g.id };
+    } else {
+      const p = ringPoint(self, g, 1200);
+      return { type: "MOVE", x: p.x, y: p.y };
+    }
+  }
 
-if [[ -f "$TOP_BOT" ]]; then
-  echo ">> Exporting CodinGame-compatible bot -> $CG_BOT"
-  # Strip ESM exports so you can paste it directly in CodinGame
-  sed -E 's/^export (const|function) /\1 /' "$TOP_BOT" > "$CG_BOT"
-  # Timestamped backups
-  cp "$TOP_BOT" "agents/evolved-bot.${TS}.${TAG}.js"
-  cp "$CG_BOT"  "agents/evolved-bot.${TS}.${TAG}.cg.js"
-else
-  echo "WARN: $TOP_BOT not found — did training generate it?"
-fi
+  // 4) RADAR: stagger usage (avoid everyone same turn)
+  if (!(self as any).radarUsed) {
+    // two waves: early (t=2/3) and mid (t=30/31), split by id parity
+    if ((obs.tick === 2 || obs.tick === 3) && (self as any).id % 2 === 0) {
+      return { type: "RADAR" };
+    }
+    if ((obs.tick === 30 || obs.tick === 31) && (self as any).id % 2 === 1) {
+      return { type: "RADAR" };
+    }
+  }
 
-if [[ -f "$BEST_GEN" ]]; then
-  cp "$BEST_GEN" "$ART_DIR/simrunner_best_genome.${TS}.${TAG}.json"
-  echo ">> Best genome snapshot -> $ART_DIR/simrunner_best_genome.${TS}.${TAG}.json"
-fi
-
-echo
-echo "=== DONE ==="
-echo "Jobs     : $JOBS"
-echo "PFSP sum : $SUMMARY_FILE"
-echo "Bot (ESM): $TOP_BOT"
-echo "Bot (CG) : $CG_BOT"
-BASH
-chmod +x scripts/train_long.sh
+  // 5) Frontier exploration under fog (least-visited cell center)
+  const tgt = S.bestFrontier();
+  return { type: "MOVE", x: tgt.x, y: tgt.y };
+}
+TS

@@ -1,40 +1,60 @@
-import path from "path";
-import { pathToFileURL, fileURLToPath } from "url";
+// packages/sim-runner/src/loadBots.ts
 
-export type BotModule = { act: Function; meta?: any };
-
-const hereDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(hereDir, "../../..");
-const agentsDir = path.join(repoRoot, "packages", "agents");
-
-const NAMED: Record<string, string> = {
-  greedy: path.join(agentsDir, "greedy-buster.js"),
-  random: path.join(agentsDir, "random-bot.js"),
-  evolved: path.join(agentsDir, "evolved-bot.js"),
+export type Bot = {
+  meta?: { name?: string; [k: string]: any };
+  act: (ctx: any, obs: any) => any;
 };
 
-export async function loadBotModule(spec: string): Promise<BotModule> {
-  const mapped = NAMED[spec];
-  if (mapped) spec = mapped;
+// Map short names -> real package export specs
+const ALIASES: Record<string, string> = {
+  greedy: "@busters/agents/greedy",
+  stunner: "@busters/agents/stunner",
+  camper: "@busters/agents/camper",
+  random: "@busters/agents/random",
+  hybrid: "@busters/agents/hybrid",
+  evolved: "@busters/agents/evolved", // if present in your repo
+  hof: "@busters/agents/hof",          // <-- important one
+};
 
-  const isFileLike =
-    spec.startsWith("./") ||
-    spec.startsWith("../") ||
-    spec.startsWith("/") ||
-    /^[A-Za-z]:[\\/]/.test(spec) ||
-    spec.startsWith("file:");
+function guessNameFromSpec(spec: string) {
+  const m = spec.match(/([^/@]+)$/);
+  return m ? m[1] : spec;
+}
 
+/** Normalize a user token into an importable spec */
+export function resolveSpec(token: string): string {
+  if (!token) return token;
+  // if already a path or scoped package, keep as-is
+  if (token.startsWith("@") || token.startsWith(".") || token.startsWith("/")) return token;
+  // else try alias
+  return ALIASES[token] ?? token;
+}
+
+/** Load a bot module by spec or alias */
+export async function loadBotModule(specOrAlias: string): Promise<Bot> {
+  const spec = resolveSpec(specOrAlias);
   let mod: any;
-  if (isFileLike) {
-    const href = spec.startsWith("file:")
-      ? spec
-      : pathToFileURL(path.isAbsolute(spec) ? spec : path.resolve(process.cwd(), spec)).href;
-    mod = await import(href);
-  } else {
+  try {
     mod = await import(spec);
+  } catch (e) {
+    // Helpful message if the alias was not resolvable
+    const hint = ALIASES[specOrAlias]
+      ? `Resolved "${specOrAlias}" -> "${spec}" but import failed. Check @busters/agents/package.json exports and file existence.`
+      : `Unknown bot token "${specOrAlias}". Try one of: ${Object.keys(ALIASES).join(", ")}, or pass a full module path.`;
+    throw new Error(`${(e as Error).message}\n${hint}`);
   }
 
-  const candidate = mod?.default?.act ? mod.default : mod;
-  if (!candidate?.act) throw new Error(`No act() export found in ${spec}`);
-  return candidate;
+  const bot: Bot = (mod?.default ?? mod) as Bot;
+  if (!bot || typeof bot.act !== "function") {
+    throw new Error(`Module "${spec}" does not export a valid bot (missing act).`);
+  }
+  if (!bot.meta) bot.meta = {};
+  if (!bot.meta.name) bot.meta.name = guessNameFromSpec(spec);
+  return bot;
 }
+
+/** Convenience: load multiple tokens */
+export async function loadMany(tokens: string[]): Promise<Bot[]> {
+  return Promise.all(tokens.map(loadBotModule));
+}
+

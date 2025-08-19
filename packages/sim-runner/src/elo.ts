@@ -1,126 +1,89 @@
-// elo.ts — PFSP sur Elo avec tie-break déterministe et persistance simple
+// packages/sim-runner/src/elo.ts
 
 import fs from "fs";
 import path from "path";
 
-// === Types partagés avec ga.ts (on redéclare pour éviter les imports croisés)
-export type Genome = {
-  radarTurn: number;
-  stunRange: number;
-  releaseDist: number;
-};
+export type EloTable = Record<string, number>;
 
-export type PFSPCandidate =
-  | { type: "module"; spec: string; id?: string }
-  | { type: "genome"; genome?: Genome; tag?: string; id?: string };
+const DEFAULT_ELO = 1000;
+const K_FACTOR = 32;
+const ARTIFACTS = path.resolve("artifacts");
+const ELO_PATH = path.resolve(ARTIFACTS, "elo.json");
 
-// === Elo utils
-const DEFAULT_RATING = 1000;
-const K = 32; // K-factor "raisonnable" pour s'adapter sans oscillations
-
-function expectedScore(rA: number, rB: number) {
-  // Elo classique
-  const qA = Math.pow(10, rA / 400);
-  const qB = Math.pow(10, rB / 400);
-  return qA / (qA + qB);
-}
-
-function getId(c: PFSPCandidate): string {
-  // Id stable et lisible pour logs/persist
-  if (c.id) return c.id;
-  if (c.type === "module") return c.spec;
-  // genome
-  if (c.tag) return c.tag;
-  if (c.genome) {
-    const g = c.genome;
-    return `hof:${g.radarTurn},${g.stunRange},${g.releaseDist}`;
-  }
-  return "@busters/agents/greedy";
-}
-
-// Petit hash déterministe (FNV1a + xorshift) pour départager sans biais
-function hash01(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
-  }
-  // xorshift pour "mixer"
-  h ^= h << 13;
-  h ^= h >>> 17;
-  h ^= h << 5;
-  // map sur [0,1)
-  return ((h >>> 0) % 0x100000000) / 0x100000000;
-}
-
-// Désirabilité PFSP : on vise p≈0.5 (matchs serrés)
-// score = 1 quand p=0.5 ; 0 quand p=0 ou 1
-function pfspDesirability(pWin: number): number {
-  // 1 - 2*|p-0.5|  =>  1 à 0.5  ;  0 aux extrêmes
-  return Math.max(0, 1 - 2 * Math.abs(pWin - 0.5));
-}
-
-// === API persistée
-export function loadElo(artifactsDir: string): Record<string, number> {
-  const p = path.resolve(artifactsDir, "elo.json");
+/** Ensure artifacts dir exists */
+function ensureArtifactsDir() {
   try {
-    if (fs.existsSync(p)) {
-      const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
-      if (raw && typeof raw === "object") return raw as Record<string, number>;
-    }
-  } catch {}
-  return {};
+    fs.mkdirSync(ARTIFACTS, { recursive: true });
+  } catch {
+    /* noop */
+  }
 }
 
-export function saveElo(artifactsDir: string, elo: Record<string, number>) {
-  const p = path.resolve(artifactsDir, "elo.json");
+/** Safe JSON read */
+function readJsonSafe<T = any>(p: string): T | null {
+  try {
+    if (!fs.existsSync(p)) return null;
+    const txt = fs.readFileSync(p, "utf8");
+    return JSON.parse(txt) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Safe JSON write */
+function writeJsonSafe(p: string, data: any) {
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, JSON.stringify(elo, null, 2));
-  } catch {}
+    fs.writeFileSync(p, JSON.stringify(data, null, 2));
+  } catch {
+    /* noop */
+  }
 }
 
-// Met à jour la cote de l’adversaire (le "joueur" est un agent virtuel figé à 1000)
-// - si won=true => l’adversaire a perdu
-// - si won=false => l’adversaire a gagné
-export function recordMatch(elo: Record<string, number>, oppId: string, won: boolean) {
-  const rPlayer = DEFAULT_RATING;
-  const rOpp = elo[oppId] ?? DEFAULT_RATING;
-
-  // du point de vue de l'adversaire
-  const expOpp = expectedScore(rOpp, rPlayer);
-  const scoreOpp = won ? 0 : 1;
-
-  const newOpp = rOpp + K * (scoreOpp - expOpp);
-  elo[oppId] = Math.round(newOpp);
+/** Return a rating for id, creating it if absent */
+export function getElo(tbl: EloTable, id: string): number {
+  if (typeof tbl[id] !== "number") tbl[id] = DEFAULT_ELO;
+  return tbl[id];
 }
 
-// Sélection PFSP avec tie-break déterministe (pas de biais "premier de liste")
-// – On choisit le candidat dont la probabilité de victoire attendue (via Elo) est la plus proche de 0.5
-// – En cas d’égalité parfaite, on départage sur un hash de l’id (stable).
-export function pickOpponentPFSP(elo: Record<string, number>, cands: PFSPCandidate[]): PFSPCandidate {
-  if (!cands.length) throw new Error("pickOpponentPFSP: empty candidates");
+/** Expected score A vs B (0..1) */
+export function expectedScore(ra: number, rb: number): number {
+  return 1 / (1 + Math.pow(10, (rb - ra) / 400));
+}
 
-  const rPlayer = DEFAULT_RATING;
+/** Update Elo for A vs B with scoreA in {1,0.5,0} */
+export function updateElo(tbl: EloTable, aId: string, bId: string, scoreA: number, k: number = K_FACTOR) {
+  const ra = getElo(tbl, aId);
+  const rb = getElo(tbl, bId);
+  const expA = expectedScore(ra, rb);
+  const expB = 1 - expA;
 
-  // Évalue chaque candidat
-  const scored = cands.map((c) => {
-    const id = getId(c);
-    const rOpp = elo[id] ?? DEFAULT_RATING;
-    const pWin = expectedScore(rPlayer, rOpp); // proba que "nous" gagnions
-    const desirability = pfspDesirability(pWin);
-    const tie = hash01(id); // tie-break déterministe
-    return { c, id, desirability, tie, rOpp };
-  });
+  const scoreB = 1 - scoreA; // simple symmetric
+  const newRa = ra + k * (scoreA - expA);
+  const newRb = rb + k * (scoreB - expB);
 
-  // Argmax sur (desirability, tie) pour éviter le biais au premier
-  scored.sort((a, b) => {
-    if (b.desirability !== a.desirability) return b.desirability - a.desirability;
-    if (b.tie !== a.tie) return b.tie - a.tie; // ordre stable mais "mélangé" par hash
-    // fallback ultime : id lexicographique
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
+  tbl[aId] = newRa;
+  tbl[bId] = newRb;
+}
 
-  return scored[0].c;
+/** Load Elo table from artifacts/elo.json (or empty if none) */
+export function loadEloTable(filePath: string = ELO_PATH): EloTable {
+  ensureArtifactsDir();
+  const data = readJsonSafe<EloTable>(filePath);
+  return data && typeof data === "object" ? { ...data } : {};
+}
+
+/** Save Elo table to artifacts/elo.json */
+export function saveEloTable(tbl: EloTable, filePath: string = ELO_PATH) {
+  ensureArtifactsDir();
+  writeJsonSafe(filePath, tbl);
+}
+
+/** Convenience: record match outcome and persist */
+export function recordResult(aId: string, bId: string, result: "win" | "draw" | "loss") {
+  const tbl = loadEloTable();
+  const scoreA = result === "win" ? 1 : result === "draw" ? 0.5 : 0;
+  updateElo(tbl, aId, bId, scoreA);
+  saveEloTable(tbl);
 }
 

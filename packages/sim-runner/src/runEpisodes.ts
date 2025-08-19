@@ -4,6 +4,15 @@ import { TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import type { Action, AgentContext } from '@busters/shared';
 import { XorShift32 } from '@busters/shared';
 
+type DebugEvent = {
+  side: 'A' | 'B';
+  busterId: number;
+  tag: string;
+  reason?: string;
+  data?: any;
+  action?: any;
+};
+
 export interface RunOpts {
   seed: number;
   episodes: number;

@@ -18,7 +18,10 @@
     "release:cg": "scripts/release-cg-bot.sh",
     "elo:inspect": "tsx scripts/elo-inspect.ts",
     "elo:inspect:explore": "PFSP_TARGET=0.5 PFSP_TEMP=0.2 tsx scripts/elo-inspect.ts",
-    "pfsp:report": "tsx scripts/pfsp-report.ts"
+    "pfsp:report": "tsx scripts/pfsp-report.ts",
+    "cg:export:genome": "tsx scripts/export-codingame.ts --from genome --in packages/sim-runner/artifacts/simrunner_best_genome.json --out agents/codingame-bot.js",
+    "cg:export:hybrid": "tsx scripts/export-codingame.ts --from hybrid --out agents/codingame-bot.js",
+    "cg:export:champ": "tsx scripts/export-champion.ts --standings packages/sim-runner/artifacts/tournament_standings.json --out agents/codingame-bot.js"
   },
   "devDependencies": {
     "tsx": "^4.20.4",

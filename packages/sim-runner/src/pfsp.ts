@@ -1,14 +1,48 @@
 // packages/sim-runner/src/pfsp.ts
-import { EloTable, expectedScore, getElo, loadEloTable } from "./elo";
+import fs from "fs";
+import path from "path";
 
+export type EloTable = Record<string, number>;
 export type Opponent = { id: string; act?: Function };
+
+// ---- Tiny local Elo helpers (decoupled from ./elo.ts) ----
+const DEFAULT_ELO = 1000;
+const ELO_PATH = process.env.ELO_PATH || path.resolve("artifacts", "elo.json");
+
+function loadEloTable(): EloTable {
+  try {
+    const p = ELO_PATH;
+    if (fs.existsSync(p)) {
+      const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
+      const out: EloTable = {};
+      for (const [k, v] of Object.entries(raw || {})) {
+        const n = Number(v);
+        if (Number.isFinite(n)) out[k] = n;
+      }
+      return out;
+    }
+  } catch {}
+  return {};
+}
+
+function getElo(elo: EloTable, id: string): number {
+  const v = elo[id];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  // lazily default & remember so stability is consistent
+  return (elo[id] = DEFAULT_ELO);
+}
+
+// Elo expected score (A vs B)
+function expectedScore(rA: number, rB: number) {
+  return 1 / (1 + Math.pow(10, (rB - rA) / 400));
+}
 
 /**
  * PFSP selection using Elo:
  *  - Prefers opponents near target win-rate (default 0.5).
  *  - Samples with a softmax temperature (default 0.2).
- * You can override defaults via env:
- *   PFSP_TARGET=0.55 PFSP_TEMP=0.15
+ * Env overrides:
+ *   PFSP_TARGET=0.55 PFSP_TEMP=0.15 ELO_PATH=artifacts/elo.json
  */
 export function selectOpponentsPFSP(params: {
   meId: string;
@@ -55,7 +89,7 @@ export function selectOpponentsPFSP(params: {
   const scored = cand.map((c) => {
     const rOpp = getElo(elo, c.id);
     const pWin = expectedScore(rMe, rOpp);
-    const closeness = 1 - Math.abs(pWin - target); // [0..1], 1 = closest to target
+    const closeness = 1 - Math.abs(pWin - target); // [0..1], 1 = closest
     return { opp: c, pWin, closeness };
   });
 
