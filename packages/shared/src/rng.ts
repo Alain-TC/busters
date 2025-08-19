@@ -10,5 +10,5 @@ export class XorShift32 {
     this._state = x >>> 0;
     return this._state;
   }
-  float(): number { return (this.int() >>> 0) / 0xFFFFFFFF; }
+  float(): number { return (this.int() >>> 0) / 0x100000000; }
 }
