@@ -55,7 +55,9 @@ type Obs = {
 
 /** Memory per buster */
 const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean; wp: number }>();
+export const __mem = mem; // exposed for tests
 function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false, wp: 0 }); return mem.get(id)!; }
+let lastTick = Infinity;
 
 /** Patrol paths used as exploration frontiers (simple & fast) */
 const PATROLS: Pt[][] = [
@@ -263,9 +265,11 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
 
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
+  const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
+  if (tick <= 1 && tick < lastTick) mem.clear();
+  lastTick = tick;
   const me = obs.self;
   const m = M(me.id);
-  const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
   const state = getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
 
