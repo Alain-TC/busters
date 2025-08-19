@@ -69,3 +69,33 @@ test('step scores when releasing carried ghost in base', () => {
   assert.equal(bEnd.value, 0);
 });
 
+test('stun drops carried ghost and sets cooldown', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+  // place within stun range
+  attacker.x = 1000; attacker.y = 1000;
+  victim.x = attacker.x + RULES.STUN_RANGE - 1; victim.y = attacker.y;
+
+  // simulate victim carrying a ghost
+  const ghost = state.ghosts[0];
+  state.ghosts = [];
+  victim.state = 1;
+  victim.value = ghost.id;
+
+  const actions: ActionsByTeam = { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any;
+  const next = step(state, actions);
+
+  const stunned = next.busters.find(b => b.id === victim.id)!;
+  assert.equal(stunned.state, 2);
+  assert.equal(stunned.value, RULES.STUN_DURATION - 1);
+
+  const postAttacker = next.busters.find(b => b.id === attacker.id)!;
+  assert.equal(postAttacker.stunCd, RULES.STUN_COOLDOWN - 1);
+
+  assert.equal(next.ghosts.length, 1);
+  assert.equal(next.ghosts[0].id, ghost.id);
+  assert.equal(next.ghosts[0].x, victim.x);
+  assert.equal(next.ghosts[0].y, victim.y);
+});
+
