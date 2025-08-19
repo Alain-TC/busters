@@ -132,8 +132,12 @@ async function main() {
     return;
   }
 
-  // If any frame has actions, we’ll use tag-based mode.
-  const actionsExist = !!frames.find((f) => (f as any).actionsA || (f as any).actionsB);
+  // If any action contains a debug tag, we'll use tag-based mode. Otherwise,
+  // fall back to inferring events from state changes.
+  const actionsExist = frames.some((f) =>
+    (f as any).actionsA?.some((a: any) => a?.__dbg?.tag || a?.tag) ||
+    (f as any).actionsB?.some((a: any) => a?.__dbg?.tag || a?.tag)
+  );
 
   const tagCountCombined = new Map<string, number>();
   const tagCountA = new Map<string, number>();
