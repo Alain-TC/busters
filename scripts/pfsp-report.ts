@@ -31,9 +31,10 @@ const candidates = [
   path.resolve('artifacts/pfsp_log.jsonl'),
 ];
 const logPath = explicitLog ? path.resolve(explicitLog) : candidates.find(p => fs.existsSync(p));
-if (!logPath) {
-  console.error('pfsp-report: no PFSP log found at', [explicitLog, ...candidates].join(' or '));
-  process.exit(1);
+if (!logPath || !fs.existsSync(logPath)) {
+  const locations = [explicitLog, ...candidates].filter(Boolean).join(' or ');
+  console.log('pfsp-report: no PFSP log found at', locations);
+  process.exit(0);
 }
 
 type Row = {
