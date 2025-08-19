@@ -63,13 +63,14 @@ cpu_count() {
 
 if [[ "$JOBS" == "auto" ]]; then JOBS="$(cpu_count)"; fi
 TS="$(date +%Y%m%d-%H%M%S)"
+PFSP_LOG="$ART_DIR/pfsp_log_${TS}_${TAG}.jsonl"
 
 # ========= Prep =========
 mkdir -p "$ART_DIR"
 
 if [[ "$RESET_ELO" == "1" ]]; then
   echo ">> Resetting Elo & PFSP logs in $ART_DIR"
-  rm -f "$ART_DIR/elo.json" "$ART_DIR/pfsp_log.jsonl"
+  rm -f "$ART_DIR/elo.json" "$PFSP_LOG"
 fi
 
 echo ">> Starting training"
@@ -77,7 +78,7 @@ echo "   pop=$POP gens=$GENS seedsPer=$SEEDS_PER epsPerSeed=$EPS_PER_SEED jobs=$
 echo "   oppPool=$OPP_POOL hof=$HOF subject=$SUBJECT"
 
 # ========= Train =========
-pnpm -C packages/sim-runner start train \
+PFSP_LOG_PATH="$PFSP_LOG" pnpm -C packages/sim-runner start train \
   --algo cem \
   --pop "$POP" --gens "$GENS" \
   --seeds-per "$SEEDS_PER" --eps-per-seed "$EPS_PER_SEED" \
@@ -89,7 +90,7 @@ pnpm -C packages/sim-runner start train \
 # ========= Reports =========
 echo ">> PFSP report"
 SUMMARY_FILE="$ART_DIR/pfsp_summary_${TS}_${TAG}.txt"
-pnpm pfsp:report | tee "$SUMMARY_FILE"
+pnpm pfsp:report "$PFSP_LOG" | tee "$SUMMARY_FILE"
 
 # ========= Artifacts / Exports =========
 BEST_GEN="$ART_DIR/simrunner_best_genome.json"
@@ -116,5 +117,6 @@ echo
 echo "=== DONE ==="
 echo "Jobs     : $JOBS"
 echo "PFSP sum : $SUMMARY_FILE"
+echo "PFSP log : $PFSP_LOG"
 echo "Bot (ESM): $TOP_BOT"
 echo "Bot (CG) : $CG_BOT"
