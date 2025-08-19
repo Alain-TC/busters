@@ -99,3 +99,30 @@ test('stun drops carried ghost and sets cooldown', () => {
   assert.equal(next.ghosts[0].y, victim.y);
 });
 
+test('attempting BUST while carrying causes ghost escape without scoring', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters.find(bs => bs.teamId === 0)!;
+  const ghost = state.ghosts[0];
+
+  // Capture the ghost first
+  // start outside base to avoid incidental scoring on capture
+  b.x = TEAM0_BASE.x + RULES.BASE_RADIUS + RULES.BUST_MIN + 10; b.y = TEAM0_BASE.y;
+  ghost.x = b.x; ghost.y = b.y; ghost.endurance = 1;
+  const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, capture);
+
+  // Attempt to BUST while carrying; the ghost should escape at current position
+  const escape: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const end = step(mid, escape);
+
+  const bEnd = end.busters.find(bs => bs.teamId === 0)!;
+  assert.equal(end.scores[0], 0); // no score awarded
+  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.value, 0);
+  assert.equal(end.ghosts.length, 1);
+  const escaped = end.ghosts[0];
+  assert.equal(escaped.id, ghost.id);
+  assert.equal(escaped.x, b.x);
+  assert.equal(escaped.y, b.y);
+});
+
