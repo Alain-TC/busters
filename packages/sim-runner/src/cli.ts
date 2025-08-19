@@ -5,7 +5,7 @@ import { loadBotModule } from './loadBots';
 import { runEpisodes } from './runEpisodes';
 import { runRoundRobin } from './tournament';
 
-// Hybrid subject (EVOL2 M6+)
+// Hybrid subject (EVOL2)
 import {
   ORDER,
   baselineVec,

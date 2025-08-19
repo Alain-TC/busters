@@ -1,5 +1,5 @@
 /**
- * CodinGame Busters — EVOL2 exporter (Milestone M2)
+ * CodinGame Busters — EVOL2 exporter
  * Single-file bot generated from local training/tournament artifacts.
  */
 

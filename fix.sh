@@ -1,11 +1,11 @@
 cat > packages/agents/hybrid-bot.ts <<'TS'
-/** EVOL2 — Milestone M1: Hybrid with tiny POMDP scaffolding
+/** EVOL2 — Hybrid with tiny POMDP scaffolding
  *  - Uses a coarse visit grid for frontier exploration under fog
  *  - Tracks enemy last-seen (pos, carrying, stunCd)
  *  - Safe RADAR schedule (staggered), ring busting, carry→release
  */
 
-export const meta = { name: "HybridBaseline", version: "M1" };
+export const meta = { name: "HybridBaseline", version: "1" };
 
 import { HybridState, getState, Pt } from "./lib/state";
 

@@ -37,7 +37,7 @@ function writeOut(code: string) {
 function cgHeader(): string {
   return [
     "/**",
-    " * CodinGame Busters — EVOL2 exporter (Milestone M2)",
+    " * CodinGame Busters — EVOL2 exporter",
     " * Single-file bot generated from local training/tournament artifacts.",
     " */",
     "",
@@ -155,7 +155,7 @@ function makeGenomeBot(g: Genome): string {
   return cgHeader() + "\n" + body + "\n";
 }
 
-// --- HYBRID baseline (M2). Same as above but with a bit richer defaults & 2 radars.
+// --- HYBRID baseline. Same as above but with a bit richer defaults & 2 radars.
 function makeHybridBot(weights?: Partial<Genome> & { radar2Turn?: number }) {
   const w = {
     radarTurn: 2,
