@@ -4,6 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
+import { HybridState, getState } from "./lib/state";
 
 // Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
 const fog = new Fog();
@@ -105,12 +106,12 @@ function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
   return Array.from(map.values());
 }
 
-function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
+function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
   const tasks: Task[] = [];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
 
-  // INTERCEPT enemy carriers
+  // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
     if (e.state === 1) {
       const tx = Math.round((e.x + MY.x) / 2);
@@ -118,9 +119,25 @@ function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
       tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
     }
   }
+  // INTERCEPT last-seen carriers
+  for (const e of state.enemies.values()) {
+    if (e.carrying && !enemies.some(v => v.id === e.id)) {
+      const tx = Math.round((e.last.x + MY.x) / 2);
+      const ty = Math.round((e.last.y + MY.y) / 2);
+      tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
+    }
+  }
 
   // DEFEND base if enemies are close
-  const nearThreat = enemies.find(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS);
+  let nearThreat = enemies.find(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS);
+  if (!nearThreat) {
+    for (const e of state.enemies.values()) {
+      if (dist(e.last.x, e.last.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS) {
+        nearThreat = { id: e.id, x: e.last.x, y: e.last.y } as Ent;
+        break;
+      }
+    }
+  }
   if (nearThreat) {
     const tx = Math.round((nearThreat.x + MY.x) / 2);
     const ty = Math.round((nearThreat.y + MY.y) / 2);
@@ -136,17 +153,17 @@ function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
   }
 
   // BLOCK enemy base (if no carriers seen)
-  if (!enemies.some(e => e.state === 1)) {
+  if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
     tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
-  // EXPLORE: fog frontier target per teammate (fallback to patrols)
+  // EXPLORE: coarse frontier via shared state (fallback to patrols)
   const team = uniqTeam(meObs.self, meObs.friends);
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
     const payload: any = { id: mate.id };
-    if (!early) target = fog.pickFrontierTarget(mate);
+    if (!early) target = state.bestFrontier();
     if (!target) {
       const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
       const Mx = MPatrol(mate.id);
@@ -213,14 +230,22 @@ export function act(ctx: Ctx, obs: Obs) {
   const me = obs.self;
   const m = M(me.id);
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
+  const state = getState(ctx, obs);
+  state.trackEnemies(obs.enemies, tick);
 
   fog.beginTick(tick);
   const friends = uniqTeam(me, obs.friends);
-  for (const f of friends) fog.markVisited(f);
+  for (const f of friends) { fog.markVisited(f); state.touchVisit(f); }
 
   const { my: MY, enemy: EN } = resolveBases(ctx);
-  const enemies = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
+  const enemiesObs = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
   const ghosts  = (obs.ghostsVisible ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
+  const remembered = Array.from(state.enemies.values()).map(e => ({ id: e.id, x: e.last.x, y: e.last.y, state: e.carrying ? 1 : 0 }));
+  const enemyMap = new Map<number, Ent>();
+  for (const e of enemiesObs) enemyMap.set(e.id, e);
+  for (const e of remembered) if (!enemyMap.has(e.id)) enemyMap.set(e.id, e);
+  const enemiesAll = Array.from(enemyMap.values()).sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
+  const enemies = enemiesObs;
 
   if (enemies.length || ghosts.length) fog.clearCircle(me, 2200);
   for (const g of ghosts) fog.bumpGhost(g.x, g.y);
@@ -273,8 +298,8 @@ export function act(ctx: Ctx, obs: Obs) {
 
   if (planTick !== tick) {
     const team = friends; // includes self
-    const tasks = buildTasks(ctx, obs, MY, EN);
-    planAssign = runAuction(team, tasks, enemies, MY);
+    const tasks = buildTasks(ctx, obs, state, MY, EN);
+    planAssign = runAuction(team, tasks, enemiesAll, MY);
     planTick = tick;
   }
 
