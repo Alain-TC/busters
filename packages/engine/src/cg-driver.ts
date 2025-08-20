@@ -6,7 +6,7 @@ import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
 import { Action, TeamId, MAX_TICKS } from '@busters/shared';
 
-function parseAction(line: string): Action | undefined {
+export function parseAction(line: string): Action | undefined {
   const parts = line.trim().split(/\s+/);
   const cmd = parts[0]?.toUpperCase();
   switch (cmd) {
@@ -23,7 +23,7 @@ function parseAction(line: string): Action | undefined {
     case 'EJECT':
       return { type: 'EJECT', x: Number(parts[1]), y: Number(parts[2]) };
     case 'WAIT':
-      return undefined;
+      return { type: 'WAIT' };
     default:
       return undefined;
   }

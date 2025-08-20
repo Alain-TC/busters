@@ -279,6 +279,13 @@ test('attempting BUST while carrying causes ghost escape without scoring', () =>
   assert.equal(escaped.y, b.y);
 });
 
+test('explicit WAIT action behaves as no-op', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const waitNext = step(state, { 0: [{ type: 'WAIT' }], 1: [] } as any);
+  const undefNext = step(state, { 0: [undefined], 1: [] } as any);
+  assert.deepEqual(waitNext, undefNext);
+});
+
 test('eject moves ghost only up to max distance', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters[0];
