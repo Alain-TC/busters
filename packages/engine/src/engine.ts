@@ -53,7 +53,8 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
     scores: { 0: 0, 1: 0 },
     busters, ghosts,
     radarNextVision: {},                 // used by next tick only
-    lastSeenTickForGhost: {}
+    lastSeenTickForGhost: {},
+    lastSeenByGhost: {}
   };
   return state;
 }
@@ -74,7 +75,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     busters: state.busters.map(b => ({ ...b })),
     ghosts: state.ghosts.map(g => ({ ...g, engagedBy: 0 })),
     radarNextVision: {}, // ← will be filled by RADAR uses this tick, to apply on *next* tick
-    lastSeenTickForGhost: { ...state.lastSeenTickForGhost }
+    lastSeenTickForGhost: { ...state.lastSeenTickForGhost },
+    lastSeenByGhost: {}
   };
 
   // Clear previous "busting" flags from last turn
@@ -307,38 +309,44 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   }
 
   // 7) Ghost flee: one tick after they were seen; tie → flee from barycenter of tied nearest busters
-  const detectedNow = new Set<number>();
+  const detectedBy: Record<number, Array<{ x: number; y: number }>> = {};
   for (const g of next.ghosts) {
     for (const b of next.busters) {
       const d = dist(b.x, b.y, g.x, g.y);
-      if (d <= RULES.VISION) { detectedNow.add(g.id); break; }
+      if (d <= RULES.VISION) {
+        (detectedBy[g.id] ||= []).push({ x: b.x, y: b.y });
+      }
     }
   }
   for (const g of next.ghosts) {
     const wasSeenLast = state.lastSeenTickForGhost[g.id] === state.tick - 1;
-    if (wasSeenLast) {
-      // collect distances to all busters
+    const seenPrev = state.lastSeenByGhost[g.id] || [];
+    if (wasSeenLast && seenPrev.length) {
+      // collect distances to last seen positions
       let minD2 = Infinity;
-      const dists: Array<{b:BusterPublicState; d2:number}> = [];
-      for (const b of next.busters) {
-        const d2v = dist2(b.x, b.y, g.x, g.y);
-        dists.push({ b, d2: d2v });
+      const dists: Array<{ p: { x: number; y: number }; d2: number }> = [];
+      for (const p of seenPrev) {
+        const d2v = dist2(p.x, p.y, g.x, g.y);
+        dists.push({ p, d2: d2v });
         if (d2v < minD2) minD2 = d2v;
       }
       const tied = dists.filter(e => e.d2 === minD2);
       let awayFrom = { x: 0, y: 0 };
       if (tied.length > 1) {
         // barycenter of tied nearest
-        awayFrom.x = Math.round(tied.reduce((s,e)=>s+e.b.x,0)/tied.length);
-        awayFrom.y = Math.round(tied.reduce((s,e)=>s+e.b.y,0)/tied.length);
+        awayFrom.x = Math.round(tied.reduce((s, e) => s + e.p.x, 0) / tied.length);
+        awayFrom.y = Math.round(tied.reduce((s, e) => s + e.p.y, 0) / tied.length);
       } else {
-        awayFrom = tied[0] ? { x: tied[0].b.x, y: tied[0].b.y } : { x: g.x, y: g.y };
+        awayFrom = tied[0] ? { x: tied[0].p.x, y: tied[0].p.y } : { x: g.x, y: g.y };
       }
       const [nx, ny] = norm(g.x - awayFrom.x, g.y - awayFrom.y);
       g.x = clamp(roundi(g.x + nx * RULES.GHOST_FLEE), 0, next.width - 1);
       g.y = clamp(roundi(g.y + ny * RULES.GHOST_FLEE), 0, next.height - 1);
     }
-    if (detectedNow.has(g.id)) next.lastSeenTickForGhost[g.id] = state.tick;
+    if (detectedBy[g.id]) {
+      next.lastSeenTickForGhost[g.id] = state.tick;
+      next.lastSeenByGhost[g.id] = detectedBy[g.id];
+    }
   }
 
   // 8) Timers

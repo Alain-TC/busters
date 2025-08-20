@@ -384,9 +384,48 @@ test('ghost flees 400 units after detection', () => {
 
   const mid = step(state, { 0: [], 1: [] } as any);
   mid.lastSeenTickForGhost[ghost.id] = mid.tick - 1;
+  mid.lastSeenByGhost[ghost.id] = [{ x: b.x, y: b.y }];
   const end = step(mid, { 0: [], 1: [] } as any);
   const gEnd = end.ghosts[0];
   assert.equal(gEnd.x, 1900);
   assert.equal(gEnd.y, 1000);
+});
+
+test('ghost flees from last seen position even if buster moves away', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters.find(bs => bs.teamId === 0)!;
+  const enemy = state.busters.find(bs => bs.teamId === 1)!;
+  enemy.x = 0; enemy.y = 5000; // far so it doesn't detect
+  b.x = 1000; b.y = 1000;
+  const ghost = state.ghosts[0];
+  ghost.x = 1500; ghost.y = 1000;
+
+  const mid = step(state, { 0: [], 1: [] } as any);
+  const end = step(mid, { 0: [{ type: 'MOVE', x: 5000, y: 1000 }], 1: [] } as any);
+  const gEnd = end.ghosts[0];
+  assert.equal(gEnd.x, 1900);
+  assert.equal(gEnd.y, 1000);
+});
+
+test('ghost flees from barycenter of last seen busters even after they move away', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b0 = state.busters.find(bs => bs.teamId === 0)!;
+  const b1 = state.busters.find(bs => bs.teamId === 1)!;
+  b0.x = 2000; b0.y = 3000;
+  b1.x = 3000; b1.y = 2000;
+  const ghost = state.ghosts[0];
+  ghost.x = 3000; ghost.y = 3000;
+
+  const mid = step(state, { 0: [], 1: [] } as any);
+  const end = step(
+    mid,
+    {
+      0: [{ type: 'MOVE', x: 6000, y: 3000 }],
+      1: [{ type: 'MOVE', x: 3000, y: 6000 }],
+    } as any,
+  );
+  const gEnd = end.ghosts[0];
+  assert.equal(gEnd.x, 3283);
+  assert.equal(gEnd.y, 3283);
 });
 
