@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import readline from 'node:readline';
 import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
@@ -41,10 +42,39 @@ async function readLines(rl: readline.Interface, count: number): Promise<string[
   });
 }
 
+const DEFAULT_SEED = 1;
+const DEFAULT_BUSTERS = 2;
+const DEFAULT_GHOSTS = 4;
+
+function parseArgs(argv: string[]) {
+  const cfg = { seed: DEFAULT_SEED, bustersPerPlayer: DEFAULT_BUSTERS, ghostCount: DEFAULT_GHOSTS };
+  const bots: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--seed' && i + 1 < argv.length) { cfg.seed = Number(argv[++i]); }
+    else if (a.startsWith('--seed=')) { cfg.seed = Number(a.split('=')[1]); }
+    else if ((a === '--busters' || a === '--busters-per-player') && i + 1 < argv.length) { cfg.bustersPerPlayer = Number(argv[++i]); }
+    else if (a.startsWith('--busters=') || a.startsWith('--busters-per-player=')) { cfg.bustersPerPlayer = Number(a.split('=')[1]); }
+    else if ((a === '--ghosts' || a === '--ghost-count') && i + 1 < argv.length) { cfg.ghostCount = Number(argv[++i]); }
+    else if (a.startsWith('--ghosts=') || a.startsWith('--ghost-count=')) { cfg.ghostCount = Number(a.split('=')[1]); }
+    else if (a === '--config' && i + 1 < argv.length) {
+      const path = argv[++i];
+      const file = JSON.parse(readFileSync(path, 'utf8'));
+      if (typeof file.seed === 'number') cfg.seed = file.seed;
+      if (typeof file.bustersPerPlayer === 'number') cfg.bustersPerPlayer = file.bustersPerPlayer;
+      if (typeof file.ghostCount === 'number') cfg.ghostCount = file.ghostCount;
+    } else {
+      bots.push(a);
+    }
+  }
+  return { bots, cfg };
+}
+
 async function main() {
-  const [bot0Cmd, bot1Cmd] = process.argv.slice(2);
+  const { bots: botCmds, cfg } = parseArgs(process.argv.slice(2));
+  const [bot0Cmd, bot1Cmd] = botCmds;
   if (!bot0Cmd || !bot1Cmd) {
-    console.error('Usage: node cg-driver.js <bot0> <bot1>');
+    console.error('Usage: node cg-driver.js <bot0> <bot1> [--seed <n>] [--busters <n>] [--ghosts <n>] [--config <file>]');
     process.exit(1);
   }
 
@@ -54,7 +84,7 @@ async function main() {
   ];
   const readers = bots.map(b => readline.createInterface({ input: b.stdout }));
 
-  let state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 4 });
+  let state = initGame(cfg);
 
   for (const t of [0, 1] as TeamId[]) {
     const w = bots[t].stdin;
