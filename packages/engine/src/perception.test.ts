@@ -48,3 +48,21 @@ test('entity list includes radar-detected units', () => {
   assert(ids.includes(enemy.id));
   assert(ids.includes(ghost.id));
 });
+
+test('entities are returned sorted by id', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const me = state.busters.find(b => b.teamId === 0)!;
+  const enemy = state.busters.find(b => b.teamId === 1)!;
+  const ghost = state.ghosts[0];
+
+  // Place all entities within vision so they appear in the list
+  me.x = 0; me.y = 0;
+  enemy.x = 0; enemy.y = 0;
+  ghost.x = 0; ghost.y = 0;
+
+  const list = entitiesForTeam(state, 0);
+  assert.equal(list.length, 3);
+  const ids = list.map(e => e.id);
+  const sorted = [...ids].sort((a, b) => a - b);
+  assert.deepEqual(ids, sorted);
+});
