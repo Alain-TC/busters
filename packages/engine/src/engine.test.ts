@@ -284,3 +284,25 @@ test('stunned buster cannot use RADAR', () => {
   assert.ok(!(victim.id in next.radarNextVision));
 });
 
+test('ghost flees 400 units after being seen', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const g = state.ghosts[0];
+
+  // place buster within vision range of the ghost
+  b.x = 6000; b.y = 5000;
+  g.x = 5000; g.y = 5000;
+
+  // first step: ghost is seen but does not flee yet
+  const mid = step(state, { 0: [], 1: [] } as any);
+  const gSeen = mid.ghosts[0];
+  assert.equal(gSeen.x, 5000);
+  assert.equal(gSeen.y, 5000);
+
+  // second step: ghost should move 400 units away from the buster
+  const end = step(mid, { 0: [], 1: [] } as any);
+  const gFled = end.ghosts[0];
+  assert.equal(gFled.x, gSeen.x - RULES.GHOST_FLEE);
+  assert.equal(gFled.y, gSeen.y);
+});
+
