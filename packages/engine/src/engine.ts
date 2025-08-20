@@ -145,11 +145,13 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     if (b.state === 1) { b.state = 0; b.value = 0; }
   }
 
-  // 3) STUN resolution (resets stun duration; both drop any carried ghost)
+  // 3) STUN resolution (resets stun duration; both drop any carried ghost; cooldown spent on attempt)
   for (const b of next.busters) {
     if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'STUN' && b.stunCd <= 0) {
+      // cooldown is consumed regardless of target validity or range
+      b.stunCd = RULES.STUN_COOLDOWN;
       const target = busterById.get(a.busterId);
       if (target && target.teamId !== b.teamId) {
         const d = dist(b.x, b.y, target.x, target.y);
@@ -163,9 +165,6 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
           // Both sides drop what they were carrying (start-of-tick)
           dropCarried(target, startCarry.get(target.id) ?? null);
           dropCarried(b,      startCarry.get(b.id)      ?? null);
-
-          // cooldown
-          b.stunCd = RULES.STUN_COOLDOWN;
         }
       }
     }
