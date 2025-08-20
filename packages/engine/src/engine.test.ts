@@ -213,6 +213,45 @@ test('stun attempt consumes cooldown even if invalid or out of range', () => {
   assert.equal(postAttacker2.stunCd, RULES.STUN_COOLDOWN - 1);
 });
 
+test('mutual stuns drop carried ghosts and stun both busters', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 2 });
+  const b0 = state.busters.find(b => b.teamId === 0)!;
+  const b1 = state.busters.find(b => b.teamId === 1)!;
+
+  // place within stun range, far from bases
+  b0.x = 5000; b0.y = 5000;
+  b1.x = b0.x + RULES.STUN_RANGE - 1; b1.y = b0.y;
+
+  // both carrying a ghost
+  const g0 = state.ghosts[0];
+  const g1 = state.ghosts[1];
+  state.ghosts = [];
+  b0.state = 1; b0.value = g0.id;
+  b1.state = 1; b1.value = g1.id;
+
+  const actions: ActionsByTeam = {
+    0: [{ type: 'STUN', busterId: b1.id }],
+    1: [{ type: 'STUN', busterId: b0.id }],
+  } as any;
+
+  const next = step(state, actions);
+  const nb0 = next.busters.find(b => b.id === b0.id)!;
+  const nb1 = next.busters.find(b => b.id === b1.id)!;
+
+  assert.equal(nb0.state, 2);
+  assert.equal(nb1.state, 2);
+  assert.equal(nb0.value, RULES.STUN_DURATION - 1);
+  assert.equal(nb1.value, RULES.STUN_DURATION - 1);
+  assert.equal(nb0.stunCd, RULES.STUN_COOLDOWN - 1);
+  assert.equal(nb1.stunCd, RULES.STUN_COOLDOWN - 1);
+
+  assert.equal(next.ghosts.length, 2);
+  const dg0 = next.ghosts.find(g => g.id === g0.id)!;
+  const dg1 = next.ghosts.find(g => g.id === g1.id)!;
+  assert.equal(dg0.x, b0.x); assert.equal(dg0.y, b0.y);
+  assert.equal(dg1.x, b1.x); assert.equal(dg1.y, b1.y);
+});
+
 test('attempting BUST while carrying causes ghost escape without scoring', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters.find(bs => bs.teamId === 0)!;
