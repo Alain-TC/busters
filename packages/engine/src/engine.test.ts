@@ -37,6 +37,19 @@ test('lone ghost spawns outside base radius', () => {
   assert.ok(d1 > RULES.BASE_RADIUS);
 });
 
+test('ghost stamina follows official distribution', () => {
+  const total = 1000;
+  const state = initGame({ seed: 123, bustersPerPlayer: 0, ghostCount: total });
+  const counts: Record<number, number> = { 3: 0, 15: 0, 40: 0 };
+  for (const g of state.ghosts) counts[g.endurance]++;
+  const pct3 = counts[3] / total;
+  const pct15 = counts[15] / total;
+  const pct40 = counts[40] / total;
+  assert.ok(Math.abs(pct3 - 0.2) < 0.05);
+  assert.ok(Math.abs(pct15 - 0.6) < 0.05);
+  assert.ok(Math.abs(pct40 - 0.2) < 0.05);
+});
+
 test('initGame places busters and ghosts symmetrically', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 3, ghostCount: 4 });
   const team0 = state.busters.filter(b => b.teamId === 0);

@@ -2,9 +2,27 @@ import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@buste
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import { clamp, dist, dist2, norm, roundi, XorShift32 } from '@busters/shared';
 
-export type InitOpts = { seed?: number; bustersPerPlayer: number; ghostCount: number; endurancePool?: number[] };
+export type InitOpts = {
+  seed?: number;
+  bustersPerPlayer: number;
+  ghostCount: number;
+  /**
+   * Weighted distribution for ghost stamina values. Each entry gives the
+   * stamina value and its relative weight in the draw.
+   */
+  enduranceWeights?: Array<{ value: number; weight: number }>;
+};
 
-export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool = [3, 15, 40] }: InitOpts): GameState {
+export function initGame({
+  seed = 1,
+  bustersPerPlayer,
+  ghostCount,
+  enduranceWeights = [
+    { value: 3, weight: 1 },
+    { value: 15, weight: 3 },
+    { value: 40, weight: 1 },
+  ],
+}: InitOpts): GameState {
   const busters: BusterPublicState[] = [];
   let id = 0;
   for (let t: TeamId = 0; t < 2; t++) {
@@ -29,7 +47,17 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
     );
     return { x, y };
   };
-  const randEndurance = () => endurancePool[Math.floor(rng.float() * endurancePool.length)];
+  // Official distribution: 20% stamina 3, 60% stamina 15 and 20% stamina 40
+  // implemented via weighted draw from `enduranceWeights`.
+  const totalWeight = enduranceWeights.reduce((s, e) => s + e.weight, 0);
+  const randEndurance = () => {
+    let r = rng.float() * totalWeight;
+    for (const { value, weight } of enduranceWeights) {
+      if (r < weight) return value;
+      r -= weight;
+    }
+    return enduranceWeights[enduranceWeights.length - 1].value; // fallback
+  };
   for (let i = 0; i < pairCount; i++) {
     const { x: gx, y: gy } = randCoord();
     const endurance = randEndurance();
