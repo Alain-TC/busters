@@ -146,6 +146,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   }
 
   // 3) STUN resolution (resets stun duration; both drop any carried ghost)
+  const stunPairs: Array<{ attacker: BusterPublicState; target: BusterPublicState }> = [];
   for (const b of next.busters) {
     if (b.state === 2) continue;
     const a = intents.get(b.id);
@@ -154,21 +155,29 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       if (target && target.teamId !== b.teamId) {
         const d = dist(b.x, b.y, target.x, target.y);
         if (d <= RULES.STUN_RANGE) {
-          // Always reset stun timer to full duration
-          target.state = 2;
-          target.value = RULES.STUN_DURATION;
-          // cancel any action the target intended to perform this turn
-          intents.delete(target.id);
-
-          // Both sides drop what they were carrying (start-of-tick)
-          dropCarried(target, startCarry.get(target.id) ?? null);
-          dropCarried(b,      startCarry.get(b.id)      ?? null);
-
-          // cooldown
-          b.stunCd = RULES.STUN_COOLDOWN;
+          stunPairs.push({ attacker: b, target });
         }
       }
     }
+  }
+
+  const toStun = new Set<BusterPublicState>();
+  for (const { attacker, target } of stunPairs) {
+    attacker.stunCd = RULES.STUN_COOLDOWN;
+
+    // Both sides drop what they were carrying (start-of-tick)
+    dropCarried(target, startCarry.get(target.id) ?? null);
+    dropCarried(attacker, startCarry.get(attacker.id) ?? null);
+
+    toStun.add(target);
+  }
+
+  for (const target of toStun) {
+    // Always reset stun timer to full duration
+    target.state = 2;
+    target.value = RULES.STUN_DURATION;
+    // cancel any action the target intended to perform this turn
+    intents.delete(target.id);
   }
 
   // 4) RELEASE / EJECT / RADAR
