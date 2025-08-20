@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
-import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES } from '@busters/shared';
+import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES, dist } from '@busters/shared';
 
 test('initGame sets up teams and ghosts within bounds', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 3 });
@@ -21,7 +21,20 @@ test('initGame sets up teams and ghosts within bounds', () => {
   for (const g of state.ghosts) {
     assert.ok(g.x >= 0 && g.x < MAP_W);
     assert.ok(g.y >= 0 && g.y < MAP_H);
+    const d0 = dist(g.x, g.y, TEAM0_BASE.x, TEAM0_BASE.y);
+    const d1 = dist(g.x, g.y, TEAM1_BASE.x, TEAM1_BASE.y);
+    assert.ok(d0 > RULES.BASE_RADIUS);
+    assert.ok(d1 > RULES.BASE_RADIUS);
   }
+});
+
+test('lone ghost spawns outside base radius', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const g = state.ghosts[0];
+  const d0 = dist(g.x, g.y, TEAM0_BASE.x, TEAM0_BASE.y);
+  const d1 = dist(g.x, g.y, TEAM1_BASE.x, TEAM1_BASE.y);
+  assert.ok(d0 > RULES.BASE_RADIUS);
+  assert.ok(d1 > RULES.BASE_RADIUS);
 });
 
 test('initGame places busters and ghosts symmetrically', () => {

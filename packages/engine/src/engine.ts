@@ -18,10 +18,17 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
   const ghosts: GhostState[] = [];
   const rng = new XorShift32(seed);
   const pairCount = Math.floor(ghostCount / 2);
-  const randCoord = () => ({
-    x: Math.floor(rng.float() * MAP_W),
-    y: Math.floor(rng.float() * MAP_H),
-  });
+  const randCoord = () => {
+    let x: number, y: number;
+    do {
+      x = Math.floor(rng.float() * MAP_W);
+      y = Math.floor(rng.float() * MAP_H);
+    } while (
+      dist(x, y, TEAM0_BASE.x, TEAM0_BASE.y) <= RULES.BASE_RADIUS ||
+      dist(x, y, TEAM1_BASE.x, TEAM1_BASE.y) <= RULES.BASE_RADIUS
+    );
+    return { x, y };
+  };
   const randEndurance = () => endurancePool[Math.floor(rng.float() * endurancePool.length)];
   for (let i = 0; i < pairCount; i++) {
     const { x: gx, y: gy } = randCoord();
