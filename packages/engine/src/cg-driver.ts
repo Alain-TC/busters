@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
-import { initGame, step } from './engine';
+import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
 import { Action, TeamId, MAX_TICKS } from '@busters/shared';
 
-function parseAction(line: string): Action {
+function parseAction(line: string): Action | undefined {
   const parts = line.trim().split(/\s+/);
   const cmd = parts[0]?.toUpperCase();
   switch (cmd) {
@@ -20,8 +20,10 @@ function parseAction(line: string): Action {
       return { type: 'RADAR' };
     case 'EJECT':
       return { type: 'EJECT', x: Number(parts[1]), y: Number(parts[2]) };
+    case 'WAIT':
+      return undefined;
     default:
-      return { type: 'MOVE', x: 0, y: 0 };
+      return undefined;
   }
 }
 
@@ -76,10 +78,10 @@ async function main() {
       readLines(readers[1], state.bustersPerPlayer)
     ]);
 
-    const actions: Record<TeamId, Action[]> = {
+    const actions: ActionsByTeam = {
       0: lines0.map(parseAction),
       1: lines1.map(parseAction)
-    } as any;
+    };
 
     state = step(state, actions);
   }

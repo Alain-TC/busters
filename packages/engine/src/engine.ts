@@ -58,7 +58,7 @@ function withinBase(b: {x:number;y:number}): { team: TeamId | null } {
   return { team: (base0 ?? base1) as TeamId | null };
 }
 
-export type ActionsByTeam = Record<TeamId, Action[]>; // index aligned with each team's busters order
+export type ActionsByTeam = Record<TeamId, (Action | undefined)[]>; // index aligned with each team's busters order
 
 export function step(state: GameState, actions: ActionsByTeam): GameState {
   // NOTE: radarNextVision is not carried over; it is *consumed* by perception for this tick only
