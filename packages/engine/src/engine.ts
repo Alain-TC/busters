@@ -1,28 +1,53 @@
 import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@busters/shared';
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import { clamp, dist, dist2, norm, roundi } from '@busters/shared';
-import { XorShift32 } from '@busters/shared';
+
+const BUSTER_OFFSETS: { x: number; y: number }[] = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 0, y: 100 },
+  { x: 100, y: 100 },
+  { x: 200, y: 0 },
+  { x: 0, y: 200 },
+  { x: 200, y: 200 },
+  { x: 50, y: 150 },
+  { x: 150, y: 50 },
+];
 
 export type InitOpts = { seed?: number; bustersPerPlayer: number; ghostCount: number; endurancePool?: number[] };
 
 export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool = [3, 15, 40] }: InitOpts): GameState {
-  const rng = new XorShift32(seed);
   const busters: BusterPublicState[] = [];
   let id = 0;
   for (let t: TeamId = 0; t < 2; t++) {
     for (let i = 0; i < bustersPerPlayer; i++) {
-      const base = t === 0 ? TEAM0_BASE : TEAM1_BASE;
-      const jitterX = Math.floor((rng.float() - 0.5) * 400);
-      const jitterY = Math.floor((rng.float() - 0.5) * 400);
-      busters.push({ id: id++, teamId: t, x: base.x + jitterX, y: base.y + jitterY, state: 0, value: 0, stunCd: 0, radarUsed: false });
+      const off = BUSTER_OFFSETS[i % BUSTER_OFFSETS.length];
+      let x: number, y: number;
+      if (t === 0) {
+        x = TEAM0_BASE.x + off.x;
+        y = TEAM0_BASE.y + off.y;
+      } else {
+        // mirror across map center
+        x = MAP_W - 1 - (TEAM0_BASE.x + off.x);
+        y = MAP_H - 1 - (TEAM0_BASE.y + off.y);
+      }
+      busters.push({ id: id++, teamId: t, x, y, state: 0, value: 0, stunCd: 0, radarUsed: false });
     }
   }
   const ghosts: GhostState[] = [];
-  for (let g = 0; g < ghostCount; g++) {
-    const gx = Math.floor(rng.float() * (MAP_W - 1000)) + 500;
-    const gy = Math.floor(rng.float() * (MAP_H - 1000)) + 500;
-    const endurance = endurancePool[Math.floor(rng.float() * endurancePool.length)];
-    ghosts.push({ id: g, x: gx, y: gy, endurance, engagedBy: 0 });
+  const pairCount = Math.floor(ghostCount / 2);
+  for (let i = 0; i < pairCount; i++) {
+    const gx = 500 + (i * 1000) % (MAP_W - 1000);
+    const gy = 500 + Math.floor((i * 1000) / (MAP_W - 1000)) * 1000;
+    const endurance = endurancePool[i % endurancePool.length];
+    ghosts.push({ id: ghosts.length, x: gx, y: gy, endurance, engagedBy: 0 });
+    ghosts.push({ id: ghosts.length, x: MAP_W - 1 - gx, y: MAP_H - 1 - gy, endurance, engagedBy: 0 });
+  }
+  if (ghostCount % 2 === 1) {
+    const gx = Math.floor((MAP_W - 1) / 2);
+    const gy = Math.floor((MAP_H - 1) / 2);
+    const endurance = endurancePool[pairCount % endurancePool.length];
+    ghosts.push({ id: ghosts.length, x: gx, y: gy, endurance, engagedBy: 0 });
   }
   const state: GameState = {
     seed, tick: 0, width: MAP_W, height: MAP_H,
