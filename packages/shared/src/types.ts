@@ -6,7 +6,8 @@ export type Action =
   | { type: 'RELEASE' }
   | { type: 'STUN'; busterId: number }
   | { type: 'RADAR' }
-  | { type: 'EJECT'; x: number; y: number };
+  | { type: 'EJECT'; x: number; y: number }
+  | { type: 'WAIT' };
 
 export type BusterPublicState = {
   id: number;

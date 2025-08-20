@@ -108,7 +108,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     for (let i = 0; i < teamB.length; i++) {
       const b = teamB[i];
       const a = teamActs[i];
-      if (!a) continue;
+      if (!a || a.type === 'WAIT') continue;
       if (b.state === 2) continue; // stunned cannot act
       switch (a.type) {
         case 'MOVE': intents.set(b.id, { type: 'MOVE', x: clamp(a.x, 0, next.width - 1), y: clamp(a.y, 0, next.height - 1) }); break;

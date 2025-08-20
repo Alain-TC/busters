@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
+import { parseAction } from './cg-driver';
 import { TEAM0_BASE, RULES, MAX_TICKS } from '@busters/shared';
+
+test('parseAction parses WAIT as explicit action', () => {
+  assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
+});
 
 test('loop ends when all ghosts are scored', () => {
   let state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
