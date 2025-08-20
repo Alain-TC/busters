@@ -126,3 +126,26 @@ test('attempting BUST while carrying causes ghost escape without scoring', () =>
   assert.equal(escaped.y, b.y);
 });
 
+test('releasing outside base decreases score and respawns ghost', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters.find(bs => bs.teamId === 0)!;
+  const ghost = state.ghosts[0];
+
+  // Position buster outside any base and capture the ghost
+  b.x = TEAM0_BASE.x + RULES.BASE_RADIUS + 100; b.y = TEAM0_BASE.y;
+  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+  const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, capture);
+
+  const before = mid.scores[0];
+  const release: ActionsByTeam = { 0: [{ type: 'RELEASE' }], 1: [] } as any;
+  const end = step(mid, release);
+
+  assert.equal(end.scores[0], before - 1);
+  assert.equal(end.ghosts.length, 1);
+  const dropped = end.ghosts[0];
+  assert.equal(dropped.id, ghost.id);
+  assert.equal(dropped.x, mid.busters[0].x);
+  assert.equal(dropped.y, mid.busters[0].y);
+});
+
