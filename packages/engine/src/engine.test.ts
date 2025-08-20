@@ -10,13 +10,11 @@ test('initGame sets up teams and ghosts within bounds', () => {
 
   for (const b of state.busters) {
     if (b.teamId === 0) {
-      const dx = Math.abs(b.x - TEAM0_BASE.x);
-      const dy = Math.abs(b.y - TEAM0_BASE.y);
-      assert.ok(dx <= 200 && dy <= 200);
+      assert.equal(b.x, TEAM0_BASE.x);
+      assert.equal(b.y, TEAM0_BASE.y);
     } else {
-      const dx = Math.abs(b.x - TEAM1_BASE.x);
-      const dy = Math.abs(b.y - TEAM1_BASE.y);
-      assert.ok(dx <= 200 && dy <= 200);
+      assert.equal(b.x, TEAM1_BASE.x);
+      assert.equal(b.y, TEAM1_BASE.y);
     }
   }
 

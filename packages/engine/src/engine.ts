@@ -2,18 +2,6 @@ import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@buste
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import { clamp, dist, dist2, norm, roundi } from '@busters/shared';
 
-const BUSTER_OFFSETS: { x: number; y: number }[] = [
-  { x: 0, y: 0 },
-  { x: 100, y: 0 },
-  { x: 0, y: 100 },
-  { x: 100, y: 100 },
-  { x: 200, y: 0 },
-  { x: 0, y: 200 },
-  { x: 200, y: 200 },
-  { x: 50, y: 150 },
-  { x: 150, y: 50 },
-];
-
 export type InitOpts = { seed?: number; bustersPerPlayer: number; ghostCount: number; endurancePool?: number[] };
 
 export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool = [3, 15, 40] }: InitOpts): GameState {
@@ -21,16 +9,9 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
   let id = 0;
   for (let t: TeamId = 0; t < 2; t++) {
     for (let i = 0; i < bustersPerPlayer; i++) {
-      const off = BUSTER_OFFSETS[i % BUSTER_OFFSETS.length];
-      let x: number, y: number;
-      if (t === 0) {
-        x = TEAM0_BASE.x + off.x;
-        y = TEAM0_BASE.y + off.y;
-      } else {
-        // mirror across map center
-        x = MAP_W - 1 - (TEAM0_BASE.x + off.x);
-        y = MAP_H - 1 - (TEAM0_BASE.y + off.y);
-      }
+      const base = t === 0 ? TEAM0_BASE : TEAM1_BASE;
+      const x = base.x;
+      const y = base.y;
       busters.push({ id: id++, teamId: t, x, y, state: 0, value: 0, stunCd: 0, radarUsed: false });
     }
   }
