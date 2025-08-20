@@ -1,6 +1,6 @@
 import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@busters/shared';
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
-import { clamp, dist, dist2, norm, roundi } from '@busters/shared';
+import { clamp, dist, dist2, norm, roundi, XorShift32 } from '@busters/shared';
 
 const BUSTER_OFFSETS: { x: number; y: number }[] = [
   { x: 0, y: 0 },
@@ -35,18 +35,29 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
     }
   }
   const ghosts: GhostState[] = [];
+  const rng = new XorShift32(seed);
   const pairCount = Math.floor(ghostCount / 2);
+  const randCoord = () => ({
+    x: 500 + Math.floor(rng.float() * (MAP_W - 1000)),
+    y: 500 + Math.floor(rng.float() * (MAP_H - 1000)),
+  });
+  const randEndurance = () => endurancePool[Math.floor(rng.float() * endurancePool.length)];
   for (let i = 0; i < pairCount; i++) {
-    const gx = 500 + (i * 1000) % (MAP_W - 1000);
-    const gy = 500 + Math.floor((i * 1000) / (MAP_W - 1000)) * 1000;
-    const endurance = endurancePool[i % endurancePool.length];
-    ghosts.push({ id: ghosts.length, x: gx, y: gy, endurance, engagedBy: 0 });
-    ghosts.push({ id: ghosts.length, x: MAP_W - 1 - gx, y: MAP_H - 1 - gy, endurance, engagedBy: 0 });
+    const { x: gx, y: gy } = randCoord();
+    const enduranceA = randEndurance();
+    const enduranceB = randEndurance();
+    ghosts.push({ id: ghosts.length, x: gx, y: gy, endurance: enduranceA, engagedBy: 0 });
+    ghosts.push({
+      id: ghosts.length,
+      x: MAP_W - 1 - gx,
+      y: MAP_H - 1 - gy,
+      endurance: enduranceB,
+      engagedBy: 0,
+    });
   }
   if (ghostCount % 2 === 1) {
-    const gx = Math.floor((MAP_W - 1) / 2);
-    const gy = Math.floor((MAP_H - 1) / 2);
-    const endurance = endurancePool[pairCount % endurancePool.length];
+    const { x: gx, y: gy } = randCoord();
+    const endurance = randEndurance();
     ghosts.push({ id: ghosts.length, x: gx, y: gy, endurance, engagedBy: 0 });
   }
   const state: GameState = {

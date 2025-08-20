@@ -46,6 +46,16 @@ test('initGame places busters and ghosts symmetrically', () => {
   }
 });
 
+test('odd ghost placement depends on seed', () => {
+  const s1 = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const s2 = initGame({ seed: 2, bustersPerPlayer: 1, ghostCount: 1 });
+  const g1 = s1.ghosts[0];
+  const g2 = s2.ghosts[0];
+  assert.ok(g1.x >= 500 && g1.x <= MAP_W - 500);
+  assert.ok(g1.y >= 500 && g1.y <= MAP_H - 500);
+  assert.ok(g1.x !== g2.x || g1.y !== g2.y);
+});
+
 test('step moves buster with speed limit', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
   const b = state.busters[0];
