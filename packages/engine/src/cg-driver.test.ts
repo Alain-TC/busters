@@ -11,7 +11,7 @@ test('parseAction parses WAIT as explicit action', () => {
   assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
 });
 
-test('loop ends when all ghosts are scored', () => {
+test('loop ends when no ghosts remain and none are carried', () => {
   let state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters[0];
   const ghost = state.ghosts[0];
@@ -23,7 +23,7 @@ test('loop ends when all ghosts are scored', () => {
       ? { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any
       : { 0: [{ type: 'RELEASE' }], 1: [] } as any;
     state = step(state, actions);
-    if (state.scores[0] + state.scores[1] >= state.ghostCount) {
+    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === 1)) {
       break;
     }
   }

@@ -127,7 +127,7 @@ async function main() {
     };
 
     state = step(state, actions);
-    if (state.scores[0] + state.scores[1] >= state.ghostCount) {
+    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === 1)) {
       break;
     }
   }
