@@ -1,6 +1,6 @@
 import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@busters/shared';
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
-import { clamp, dist, dist2, norm, roundi, XorShift32 } from '@busters/shared';
+import { clamp, dist, dist2, norm, roundi, CodinGameRandom } from '@busters/shared';
 
 export type InitOpts = { seed?: number; bustersPerPlayer: number; ghostCount: number; endurancePool?: number[] };
 
@@ -16,13 +16,13 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
     }
   }
   const ghosts: GhostState[] = [];
-  const rng = new XorShift32(seed);
+  const rng = new CodinGameRandom(seed);
   const pairCount = Math.floor(ghostCount / 2);
   const randCoord = () => ({
-    x: Math.floor(rng.float() * MAP_W),
-    y: Math.floor(rng.float() * MAP_H),
+    x: rng.intBetween(MAP_W),
+    y: rng.intBetween(MAP_H),
   });
-  const randEndurance = () => endurancePool[Math.floor(rng.float() * endurancePool.length)];
+  const randEndurance = () => endurancePool[rng.intBetween(endurancePool.length)];
   for (let i = 0; i < pairCount; i++) {
     const { x: gx, y: gy } = randCoord();
     const endurance = randEndurance();

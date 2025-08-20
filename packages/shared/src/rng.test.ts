@@ -1,24 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { XorShift32 } from './rng';
+import { CodinGameRandom } from './rng';
 
-test('XorShift32 generates a deterministic sequence', () => {
-  const rng = new XorShift32(1);
-  assert.equal(rng.int(), 270369);
-  assert.equal(rng.int(), 67634689);
+test('CodinGameRandom generates a deterministic sequence', () => {
+  const rng = new CodinGameRandom(1);
+  assert.equal(rng.int(), 3139097971);
+  assert.equal(rng.int(), 431529176);
 });
 
-test('XorShift32 float output is within [0, 1) and never equals 1', () => {
-  const rng = new XorShift32(123);
-  for (let i = 0; i < 1_000_000; i++) {
-    const v = rng.float();
-    assert.ok(v >= 0 && v < 1);
-  }
-});
-
-test('XorShift32 float handles max int without returning 1', () => {
-  // Seed computed to make the first int() call return 0xFFFFFFFF
-  const rng = new XorShift32(1584200935);
+test('CodinGameRandom float output is within [0, 1) and matches known value', () => {
+  const rng = new CodinGameRandom(1);
   const v = rng.float();
-  assert.ok(v < 1);
+  assert.ok(v >= 0 && v < 1);
+  assert.equal(v, 0.7308781907032909);
+});
+
+test('CodinGameRandom intBetween stays within bounds', () => {
+  const rng = new CodinGameRandom(123);
+  for (let i = 0; i < 1000; i++) {
+    const v = rng.intBetween(5);
+    assert.ok(v >= 0 && v < 5);
+  }
 });

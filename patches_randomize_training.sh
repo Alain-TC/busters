@@ -7,7 +7,7 @@ import { initGame, step } from '@busters/engine';
 import { observationsForTeam } from '@busters/engine';
 import { TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import type { Action, AgentContext } from '@busters/shared';
-import { XorShift32 } from '@busters/shared';
+import { CodinGameRandom } from '@busters/shared';
 
 export interface RunOpts {
   seed: number;
@@ -21,7 +21,7 @@ export interface RunOpts {
    * Optional sampler to vary params per episode while keeping determinism.
    * If provided, it overrides bustersPerPlayer/ghostCount/seed for that episode.
    */
-  sampler?: (epIndex: number, rng: XorShift32) => {
+  sampler?: (epIndex: number, rng: CodinGameRandom) => {
     bustersPerPlayer: number;
     ghostCount: number;
     seedOffset?: number; // added to base seed to create the episode seed
@@ -30,7 +30,7 @@ export interface RunOpts {
 
 export async function runEpisodes(opts: RunOpts) {
   let totalScoreA = 0, totalScoreB = 0;
-  const masterRng = new XorShift32(opts.seed ^ 0x9e3779b1);
+  const masterRng = new CodinGameRandom(opts.seed ^ 0x9e3779b1);
 
   for (let ep = 0; ep < opts.episodes; ep++) {
     const s = opts.sampler?.(ep, masterRng);
