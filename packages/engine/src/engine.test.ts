@@ -284,3 +284,20 @@ test('stunned buster cannot use RADAR', () => {
   assert.ok(!(victim.id in next.radarNextVision));
 });
 
+test('busting state persists into next turn until another action', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const ghost = state.ghosts[0];
+  b.x = 1000; b.y = 1000;
+  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 2;
+
+  const bust: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, bust);
+  const bMid = mid.busters[0];
+  assert.equal(bMid.state, 3);
+
+  const end = step(mid, { 0: [], 1: [] } as any);
+  const bEnd = end.busters[0];
+  assert.equal(bEnd.state, 0);
+});
+

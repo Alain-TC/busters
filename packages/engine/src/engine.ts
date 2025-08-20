@@ -71,6 +71,14 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     lastSeenTickForGhost: { ...state.lastSeenTickForGhost }
   };
 
+  // Clear previous "busting" flags from last turn
+  for (const b of next.busters) {
+    if (b.state === 3) {
+      b.state = 0;
+      b.value = 0;
+    }
+  }
+
   const busterById = new Map<number, BusterPublicState>();
   next.busters.forEach(b => busterById.set(b.id, b));
   const ghostById = new Map<number, GhostState>();
@@ -324,8 +332,6 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       if (b.value === 0) { b.state = 0; }
     }
     if (b.stunCd > 0) b.stunCd -= 1;
-    // clear "busting" flag if not actually busting next time
-    if (b.state === 3) { b.state = 0; }
   }
 
   return next;
