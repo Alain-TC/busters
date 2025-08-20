@@ -266,7 +266,7 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
-  if (tick <= 1 && tick < lastTick) mem.clear();
+  if (tick <= 1 && tick < lastTick) { mem.clear(); fog.reset(); }
   lastTick = tick;
   const me = obs.self;
   const m = M(me.id);
