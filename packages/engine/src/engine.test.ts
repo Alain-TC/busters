@@ -178,6 +178,27 @@ test('re-stunning resets stun timer to full duration', () => {
   assert.equal(afterSecond.value, RULES.STUN_DURATION - 1);
 });
 
+test('stun attempt consumes cooldown even if invalid or out of range', () => {
+  // Out of range scenario
+  let state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+  attacker.x = 1000; attacker.y = 1000;
+  victim.x = attacker.x + RULES.STUN_RANGE + 1; victim.y = attacker.y;
+  let next = step(state, { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any);
+  const postAttacker = next.busters.find(b => b.id === attacker.id)!;
+  const postVictim = next.busters.find(b => b.id === victim.id)!;
+  assert.equal(postAttacker.stunCd, RULES.STUN_COOLDOWN - 1);
+  assert.equal(postVictim.state, 0);
+
+  // Invalid target scenario
+  state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const attacker2 = state.busters.find(b => b.teamId === 0)!;
+  next = step(state, { 0: [{ type: 'STUN', busterId: 999 }], 1: [] } as any);
+  const postAttacker2 = next.busters.find(b => b.id === attacker2.id)!;
+  assert.equal(postAttacker2.stunCd, RULES.STUN_COOLDOWN - 1);
+});
+
 test('attempting BUST while carrying causes ghost escape without scoring', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters.find(bs => bs.teamId === 0)!;
