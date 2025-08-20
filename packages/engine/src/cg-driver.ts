@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
 import { Action, TeamId, MAX_TICKS } from '@busters/shared';
@@ -28,16 +29,28 @@ function parseAction(line: string): Action | undefined {
   }
 }
 
-async function readLines(rl: readline.Interface, count: number): Promise<string[]> {
+export async function readLines(rl: readline.Interface, count: number): Promise<string[]> {
   return new Promise(resolve => {
     const lines: string[] = [];
     const onLine = (line: string) => {
       lines.push(line.trim());
       if (lines.length === count) {
+        clearTimeout(timer);
         rl.removeListener('line', onLine);
         resolve(lines);
       }
     };
+
+    const timer = setTimeout(() => {
+      rl.removeListener('line', onLine);
+      if (lines.length < count) {
+        const missing = count - lines.length;
+        console.warn(`Timed out waiting for ${missing} line(s)`);
+        while (lines.length < count) lines.push('WAIT');
+      }
+      resolve(lines);
+    }, 100);
+
     rl.on('line', onLine);
   });
 }
@@ -123,7 +136,9 @@ async function main() {
   bots.forEach(b => b.kill());
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
