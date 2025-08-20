@@ -84,6 +84,9 @@ async function main() {
     };
 
     state = step(state, actions);
+    if (state.scores[0] + state.scores[1] >= state.ghostCount) {
+      break;
+    }
   }
 
   console.log(`Final scores: ${state.scores[0]} - ${state.scores[1]}`);
