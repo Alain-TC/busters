@@ -21,7 +21,9 @@ function parseAction(line: string): Action {
     case 'EJECT':
       return { type: 'EJECT', x: Number(parts[1]), y: Number(parts[2]) };
     default:
-      return { type: 'MOVE', x: 0, y: 0 };
+      const err = new Error(`Invalid command: ${line}`);
+      console.error(err.message);
+      throw err;
   }
 }
 
