@@ -6,8 +6,10 @@
 
 import fs from "fs";
 import path from "path";
+import { TUNE as TUNE_DEFAULT, WEIGHTS as WEIGHTS_DEFAULT } from "../packages/agents/hybrid-params";
 
 type Genome = { radarTurn: number; stunRange: number; releaseDist: number };
+type TW = { TUNE: any; WEIGHTS: any };
 
 function arg(flag: string, dflt?: string) {
   const i = process.argv.indexOf(flag);
@@ -155,94 +157,56 @@ function makeGenomeBot(g: Genome): string {
   return cgHeader() + "\n" + body + "\n";
 }
 
-// --- HYBRID baseline. Same as above but with a bit richer defaults & 2 radars.
-function makeHybridBot(weights?: Partial<Genome> & { radar2Turn?: number }) {
-  const w = {
-    radarTurn: 2,
-    stunRange: 1760,
-    releaseDist: 1600,
-    radar2Turn: 55,
-    ...(weights || {}),
-  };
-  const body = [
-    `const RELEASE_DIST = ${w.releaseDist};`,
-    `const STUN_RANGE   = ${w.stunRange};`,
-    `const RADAR1_TURN  = ${w.radarTurn};`,
-    `const RADAR2_TURN  = ${w.radar2Turn};`,
-    "",
-    "const PATROLS = [",
-    "  [{x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500}],",
-    "  [{x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500}],",
-    "  [{x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000}],",
-    "  [{x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500}]",
-    "];",
-    "",
-    "while (true) {",
-    "  const n = parseInt(readline()); if (!Number.isFinite(n)) break;",
-    "  const allies=[], enemies=[], ghosts=[];",
-    "  for (let i=0;i<n;i++){",
-    "    const a = readline().trim().split(/\\s+/);",
-    "    const id=+a[0], x=+a[1], y=+a[2], type=+a[3], state=+a[4], value=+a[5];",
-    "    if (type===-1) ghosts.push({id,x,y,st:state,on:value});",
-    "    else if (type===myTeamId) allies.push({id,x,y,state,value});",
-    "    else enemies.push({id,x,y,state,value});",
-    "  }",
-    "  allies.sort((a,b)=>a.id-b.id);",
-    "  const scoutId  = allies[0]?.id ?? -1;",
-    "  const radar2Id = allies[1]?.id ?? -1;",
-    "  const actions = new Array(bustersPerPlayer).fill(null);",
-    "",
-    "  for (let ai=0; ai<allies.length; ai++){",
-    "    const me = allies[ai]; const m = getMem(me.id);",
-    "    const carrying = (me.state===1); const stunned = (me.state===2);",
-    "",
-    "    if (carrying){",
-    "      const d = dist(me.x,me.y,myBase.x,myBase.y);",
-    "      if (d <= RELEASE_DIST) { actions[ai] = 'RELEASE'; continue; }",
-    "      actions[ai] = 'MOVE '+myBase.x+' '+myBase.y; continue;",
-    "    }",
-    "",
-    "    const ghostsR = ghosts.map(g=>({g, r:dist(me.x,me.y,g.x,g.y)})).sort((a,b)=>a.r-b.r);",
-    "    const enemiesR= enemies.map(e=>({e, r:dist(me.x,me.y,e.x,e.y)})).sort((a,b)=>a.r-b.r);",
-    "",
-    "    const canStun = (tick >= m.stunReadyAt) && !stunned;",
-    "    let toStun = null;",
-    "    for (const er of enemiesR){ if (er.e.state===1 && er.r <= STUN_RANGE) { toStun = er.e; break; } }",
-    "    if (!toStun && enemiesR.length && enemiesR[0].r <= BUST_MAX) toStun = enemiesR[0].e;",
-    "    if (canStun && toStun){ actions[ai] = 'STUN '+toStun.id; m.stunReadyAt = tick + STUN_CD; continue; }",
-    "",
-    "    if (!m.radarUsed && !stunned){",
-    "      if (me.id===scoutId  && tick===RADAR1_TURN){ actions[ai]='RADAR'; m.radarUsed=true; continue; }",
-    "      if (me.id===radar2Id && tick===RADAR2_TURN){ actions[ai]='RADAR'; m.radarUsed=true; continue; }",
-    "    }",
-    "",
-    "    if (ghostsR.length){",
-    "      const g = ghostsR[0].g; const r = ghostsR[0].r;",
-    "      if (r>=BUST_MIN && r<=BUST_MAX){ actions[ai] = 'BUST '+g.id; continue; }",
-    "      actions[ai] = 'MOVE '+g.x+' '+g.y; continue;",
-    "    }",
-    "",
-    "    const carrier = enemiesR.find(er=>er.e.state===1);",
-    "    if (carrier){",
-    "      const tx = Math.round((carrier.e.x + enemyBase.x)/2);",
-    "      const ty = Math.round((carrier.e.y + enemyBase.y)/2);",
-    "      actions[ai] = 'MOVE '+clamp(tx,0,W)+' '+clamp(ty,0,H); continue;",
-    "    }",
-    "",
-    "    const path = PATROLS[ai % PATROLS.length];",
-    "    let wp = m.wp % path.length; const tgt = path[wp];",
-    "    if (dist(me.x,me.y,tgt.x,tgt.y) < 800){ m.wp=(m.wp+1)%path.length; }",
-    "    const T = path[m.wp % path.length];",
-    "    actions[ai] = 'MOVE '+clamp(T.x,0,W)+' '+clamp(T.y,0,H);",
-    "  }",
-    "",
-    "  for (let i=0;i<bustersPerPlayer;i++){",
-    "    console.log(actions[i] || ('MOVE '+myBase.x+' '+myBase.y));",
-    "  }",
-    "  tick++;",
-    "}",
-  ].join("\n");
-  return cgHeader() + "\n" + body + "\n";
+// --- HYBRID exporter helper ---
+
+const ORDER = [
+  "TUNE.RELEASE_DIST",
+  "TUNE.STUN_RANGE",
+  "TUNE.RADAR1_TURN",
+  "TUNE.RADAR2_TURN",
+  "TUNE.SPACING",
+  "TUNE.SPACING_PUSH",
+  "TUNE.BLOCK_RING",
+  "TUNE.DEFEND_RADIUS",
+  "TUNE.EXPLORE_STEP_REWARD",
+  "WEIGHTS.BUST_BASE",
+  "WEIGHTS.BUST_RING_BONUS",
+  "WEIGHTS.BUST_ENEMY_NEAR_PEN",
+  "WEIGHTS.INTERCEPT_BASE",
+  "WEIGHTS.INTERCEPT_DIST_PEN",
+  "WEIGHTS.DEFEND_BASE",
+  "WEIGHTS.DEFEND_NEAR_BONUS",
+  "WEIGHTS.BLOCK_BASE",
+  "WEIGHTS.EXPLORE_BASE",
+  "WEIGHTS.DIST_PEN",
+] as const;
+
+function coerceToTW(raw: any): TW {
+  if (raw && raw.TUNE && raw.WEIGHTS) return raw as TW;
+  if (Array.isArray(raw) && raw.length === ORDER.length) {
+    const TUNE: any = {};
+    const WEIGHTS: any = {};
+    ORDER.forEach((key, i) => {
+      const v = raw[i];
+      if (key.startsWith("TUNE.")) TUNE[key.slice(5)] = v;
+      else WEIGHTS[key.slice(8)] = v;
+    });
+    return { TUNE, WEIGHTS };
+  }
+  if (raw && Array.isArray(raw.vec) && raw.vec.length === ORDER.length) {
+    return coerceToTW(raw.vec);
+  }
+  throw new Error("Invalid hybrid weights — expected {TUNE, WEIGHTS} or vector of length " + ORDER.length);
+}
+
+function makeHybridBot(tw: TW): string {
+  const TUNE_STR = JSON.stringify(tw.TUNE, null, 2);
+  const WEIGHTS_STR = JSON.stringify(tw.WEIGHTS, null, 2);
+  const templatePath = path.resolve("packages/agents/codingame-hybrid.js");
+  const template = fs.readFileSync(templatePath, "utf8");
+  return template
+    .replace(/const TUNE = [^;]*;/, `const TUNE = ${TUNE_STR} ;`)
+    .replace(/const WEIGHTS = [^;]*;/, `const WEIGHTS = ${WEIGHTS_STR} ;`);
 }
 
 // ---------- Main ----------
@@ -261,11 +225,12 @@ function makeHybridBot(weights?: Partial<Genome> & { radar2Turn?: number }) {
   }
 
   if (mode === "hybrid") {
-    let weights: any = undefined;
+    let tw: TW = { TUNE: TUNE_DEFAULT, WEIGHTS: WEIGHTS_DEFAULT };
     if (weightsPath && fs.existsSync(weightsPath)) {
-      weights = JSON.parse(fs.readFileSync(weightsPath, "utf8"));
+      const raw = JSON.parse(fs.readFileSync(weightsPath, "utf8"));
+      tw = coerceToTW(raw);
     }
-    writeOut(makeHybridBot(weights));
+    writeOut(makeHybridBot(tw));
     return;
   }
 
