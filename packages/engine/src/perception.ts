@@ -108,7 +108,7 @@ export function entitiesForTeam(state: GameState, teamId: TeamId): EntityView[] 
       y: b.y,
       entityType: b.teamId,
       state: b.state,
-      value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : b.stunCd
+      value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : 0
     }));
 
   const ghosts = Array.from(visibleGhosts.values()).map(g => ({
