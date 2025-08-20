@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, ChildProcess } from 'node:child_process';
 import readline from 'node:readline';
 import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
@@ -27,10 +27,18 @@ function parseAction(line: string): Action | undefined {
   }
 }
 
-async function readLines(rl: readline.Interface, count: number): Promise<string[]> {
-  return new Promise(resolve => {
-    const lines: string[] = [];
-    const onLine = (line: string) => {
+async function readLines(
+  rl: readline.Interface,
+  count: number,
+  bot: ChildProcess,
+  team: TeamId
+): Promise<string[]> {
+  const lines: string[] = [];
+  let onLine: (line: string) => void;
+  let timer: NodeJS.Timeout;
+
+  const linesPromise = new Promise<string[]>(resolve => {
+    onLine = (line: string) => {
       lines.push(line.trim());
       if (lines.length === count) {
         rl.removeListener('line', onLine);
@@ -39,6 +47,18 @@ async function readLines(rl: readline.Interface, count: number): Promise<string[
     };
     rl.on('line', onLine);
   });
+
+  const timeoutPromise = new Promise<string[]>((_, reject) => {
+    timer = setTimeout(() => {
+      rl.removeListener('line', onLine);
+      bot.kill();
+      reject(new Error(`Bot ${team} timed out`));
+    }, 100);
+  });
+
+  const result = await Promise.race([linesPromise, timeoutPromise]);
+  clearTimeout(timer);
+  return result;
 }
 
 async function main() {
@@ -63,31 +83,36 @@ async function main() {
     w.write(`${t}\n`);
   }
 
-  while (state.tick < MAX_TICKS) {
-    for (const t of [0, 1] as TeamId[]) {
-      const entities = entitiesForTeam(state, t);
-      const w = bots[t].stdin;
-      w.write(`${entities.length}\n`);
-      for (const e of entities) {
-        w.write(`${e.id} ${e.x} ${e.y} ${e.entityType} ${e.state} ${e.value}\n`);
+  try {
+    while (state.tick < MAX_TICKS) {
+      for (const t of [0, 1] as TeamId[]) {
+        const entities = entitiesForTeam(state, t);
+        const w = bots[t].stdin;
+        w.write(`${entities.length}\n`);
+        for (const e of entities) {
+          w.write(`${e.id} ${e.x} ${e.y} ${e.entityType} ${e.state} ${e.value}\n`);
+        }
       }
+
+      const [lines0, lines1] = await Promise.all([
+        readLines(readers[0], state.bustersPerPlayer, bots[0], 0),
+        readLines(readers[1], state.bustersPerPlayer, bots[1], 1)
+      ]);
+
+      const actions: ActionsByTeam = {
+        0: lines0.map(parseAction),
+        1: lines1.map(parseAction)
+      };
+
+      state = step(state, actions);
     }
 
-    const [lines0, lines1] = await Promise.all([
-      readLines(readers[0], state.bustersPerPlayer),
-      readLines(readers[1], state.bustersPerPlayer)
-    ]);
-
-    const actions: ActionsByTeam = {
-      0: lines0.map(parseAction),
-      1: lines1.map(parseAction)
-    };
-
-    state = step(state, actions);
+    console.log(`Final scores: ${state.scores[0]} - ${state.scores[1]}`);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
+  } finally {
+    bots.forEach(b => b.kill());
   }
-
-  console.log(`Final scores: ${state.scores[0]} - ${state.scores[1]}`);
-  bots.forEach(b => b.kill());
 }
 
 main().catch(err => {
