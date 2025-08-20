@@ -324,8 +324,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       if (b.value === 0) { b.state = 0; }
     }
     if (b.stunCd > 0) b.stunCd -= 1;
-    // clear "busting" flag if not actually busting next time
-    if (b.state === 3) { b.state = 0; }
+    // clear "busting" flag and any target if not actually busting next time
+    if (b.state === 3) { b.state = 0; b.value = 0; }
   }
 
   return next;

@@ -211,3 +211,19 @@ test('eject clamps ghost position to map bounds', () => {
   assert.equal(ejected.y, 0);
 });
 
+test('buster value resets after busting without capture', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const g = state.ghosts[0];
+  b.x = 1000; b.y = 1000;
+  g.x = b.x + RULES.BUST_MIN; g.y = b.y; g.endurance = 2;
+
+  const bust: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: g.id }], 1: [] } as any;
+  const mid = step(state, bust);
+
+  const end = step(mid, { 0: [], 1: [] } as any);
+  const bEnd = end.busters[0];
+  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.value, 0);
+});
+
