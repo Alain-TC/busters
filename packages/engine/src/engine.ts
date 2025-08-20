@@ -84,8 +84,13 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
         case 'RELEASE': intents.set(b.id, a); break;
         case 'RADAR': intents.set(b.id, a); break;
         case 'EJECT': {
-          const dx = a.x - b.x, dy = a.y - b.y; const [nx, ny] = norm(dx, dy);
-          intents.set(b.id, { type: 'EJECT', x: roundi(b.x + nx * RULES.EJECT_MAX), y: roundi(b.y + ny * RULES.EJECT_MAX) });
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d = Math.hypot(dx, dy);
+          const [nx, ny] = norm(dx, dy);
+          const travel = Math.min(d, RULES.EJECT_MAX);
+          const ex = clamp(roundi(b.x + nx * travel), 0, MAP_W - 1);
+          const ey = clamp(roundi(b.y + ny * travel), 0, MAP_H - 1);
+          intents.set(b.id, { type: 'EJECT', x: ex, y: ey });
           break;
         }
         case 'STUN': intents.set(b.id, a); break;

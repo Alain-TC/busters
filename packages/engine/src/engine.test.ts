@@ -153,3 +153,41 @@ test('attempting BUST while carrying causes ghost escape without scoring', () =>
   assert.equal(escaped.y, b.y);
 });
 
+test('eject moves ghost only up to max distance', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const ghost = state.ghosts[0];
+  state.ghosts = [];
+  b.state = 1;
+  b.value = ghost.id;
+  b.x = 1000;
+  b.y = 1000;
+
+  const targetX = b.x + 500;
+  const targetY = b.y;
+  const actions: ActionsByTeam = { 0: [{ type: 'EJECT', x: targetX, y: targetY }], 1: [] } as any;
+  const next = step(state, actions);
+  assert.equal(next.ghosts.length, 1);
+  const ejected = next.ghosts[0];
+  assert.equal(ejected.x, targetX);
+  assert.equal(ejected.y, targetY);
+});
+
+test('eject clamps ghost position to map bounds', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const ghost = state.ghosts[0];
+  state.ghosts = [];
+  b.state = 1;
+  b.value = ghost.id;
+  b.x = 1000;
+  b.y = 1000;
+
+  const actions: ActionsByTeam = { 0: [{ type: 'EJECT', x: -1000, y: -1000 }], 1: [] } as any;
+  const next = step(state, actions);
+  assert.equal(next.ghosts.length, 1);
+  const ejected = next.ghosts[0];
+  assert.equal(ejected.x, 0);
+  assert.equal(ejected.y, 0);
+});
+
