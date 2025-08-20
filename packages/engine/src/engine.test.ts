@@ -126,3 +126,21 @@ test('attempting BUST while carrying causes ghost escape without scoring', () =>
   assert.equal(escaped.y, b.y);
 });
 
+test('buster state=3 persists while busting continuously', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const ghost = state.ghosts[0];
+
+  // Place buster and ghost within bust range and give ghost enough endurance
+  b.x = 1000; b.y = 1000;
+  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 3;
+
+  const actions: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+
+  const first = step(state, actions);
+  assert.equal(first.busters[0].state, 3);
+
+  const second = step(first, actions);
+  assert.equal(second.busters[0].state, 3);
+});
+

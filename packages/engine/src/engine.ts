@@ -48,7 +48,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   const next: GameState = {
     ...state,
     tick: state.tick + 1,
-    busters: state.busters.map(b => ({ ...b })),
+    busters: state.busters.map(b => ({ ...b, state: b.state === 3 ? 0 : b.state })),
     ghosts: state.ghosts.map(g => ({ ...g, engagedBy: 0 })),
     radarNextVision: {}, // ← will be filled by RADAR uses this tick, to apply on *next* tick
     lastSeenTickForGhost: { ...state.lastSeenTickForGhost }
@@ -298,8 +298,6 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       if (b.value === 0) { b.state = 0; }
     }
     if (b.stunCd > 0) b.stunCd -= 1;
-    // clear "busting" flag if not actually busting next time
-    if (b.state === 3) { b.state = 0; }
   }
 
   return next;
