@@ -62,7 +62,7 @@ export async function runEpisodes(opts: RunOpts) {
 
       opts.onTick?.(state);
 
-      if (state.tick >= 250 || state.ghosts.length === 0) break;
+      if (state.gameOver) break;
     }
 
     totalScoreA += state.scores[0];

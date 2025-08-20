@@ -1,5 +1,5 @@
 import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@busters/shared';
-import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
+import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, MAX_TICKS } from '@busters/shared';
 import { clamp, dist, dist2, norm, roundi } from '@busters/shared';
 
 const BUSTER_OFFSETS: { x: number; y: number }[] = [
@@ -52,10 +52,12 @@ export function initGame({ seed = 1, bustersPerPlayer, ghostCount, endurancePool
   const state: GameState = {
     seed, tick: 0, width: MAP_W, height: MAP_H,
     bustersPerPlayer, ghostCount,
+    remainingGhosts: ghostCount,
     scores: { 0: 0, 1: 0 },
     busters, ghosts,
     radarNextVision: {},                 // used by next tick only
-    lastSeenTickForGhost: {}
+    lastSeenTickForGhost: {},
+    gameOver: false
   };
   return state;
 }
@@ -327,6 +329,10 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     // clear "busting" flag if not actually busting next time
     if (b.state === 3) { b.state = 0; }
   }
+
+  const scored = next.scores[0] + next.scores[1];
+  next.remainingGhosts = next.ghostCount - scored;
+  next.gameOver = next.tick >= MAX_TICKS || scored === next.ghostCount;
 
   return next;
 }

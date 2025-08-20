@@ -35,11 +35,13 @@ export type GameState = {
   height: number;
   bustersPerPlayer: number;
   ghostCount: number;
+  remainingGhosts: number;
   scores: Record<TeamId, number>;
   busters: BusterPublicState[]; // both teams
   ghosts: GhostState[]; // ghosts still on map (not scored)
   radarNextVision: Record<number, boolean>; // busterId -> true if radar effect active for next turn
   lastSeenTickForGhost: Record<number, number>; // ghostId -> last tick any buster detected (for flee timing)
+  gameOver: boolean;
 };
 
 export type Observation = {

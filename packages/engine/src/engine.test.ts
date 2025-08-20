@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
-import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES } from '@busters/shared';
+import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES, MAX_TICKS } from '@busters/shared';
 
 test('initGame sets up teams and ghosts within bounds', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 3 });
   assert.equal(state.busters.length, 4);
   assert.equal(state.ghosts.length, 3);
+  assert.equal(state.remainingGhosts, state.ghostCount);
+  assert.equal(state.gameOver, false);
 
   for (const b of state.busters) {
     if (b.teamId === 0) {
@@ -87,6 +89,8 @@ test('step scores when releasing carried ghost in base', () => {
   assert.equal(end.scores[0], 1);
   assert.equal(bEnd.state, 0);
   assert.equal(bEnd.value, 0);
+  assert.equal(end.remainingGhosts, 0);
+  assert.equal(end.gameOver, true);
 });
 
 test('stun drops carried ghost and sets cooldown', () => {
@@ -209,5 +213,13 @@ test('eject clamps ghost position to map bounds', () => {
   const ejected = next.ghosts[0];
   assert.equal(ejected.x, 0);
   assert.equal(ejected.y, 0);
+});
+
+test('gameOver becomes true when max ticks reached', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  state.tick = MAX_TICKS - 1;
+  const next = step(state, { 0: [], 1: [] } as any);
+  assert.equal(next.tick, MAX_TICKS);
+  assert.equal(next.gameOver, true);
 });
 
