@@ -323,3 +323,18 @@ test('busting state persists into next turn until another action', () => {
   assert.equal(bEnd.state, 0);
 });
 
+test('ghost flees 400 units after detection', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters.find(bs => bs.teamId === 0)!;
+  b.x = 1000; b.y = 1000;
+  const ghost = state.ghosts[0];
+  ghost.x = 1500; ghost.y = 1000;
+
+  const mid = step(state, { 0: [], 1: [] } as any);
+  mid.lastSeenTickForGhost[ghost.id] = mid.tick - 1;
+  const end = step(mid, { 0: [], 1: [] } as any);
+  const gEnd = end.ghosts[0];
+  assert.equal(gEnd.x, 1900);
+  assert.equal(gEnd.y, 1000);
+});
+
