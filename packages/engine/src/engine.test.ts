@@ -26,6 +26,26 @@ test('initGame sets up teams and ghosts within bounds', () => {
   }
 });
 
+test('initGame places busters and ghosts symmetrically', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 3, ghostCount: 4 });
+  const team0 = state.busters.filter(b => b.teamId === 0);
+  const team1 = state.busters.filter(b => b.teamId === 1);
+  assert.equal(team0.length, team1.length);
+  for (let i = 0; i < team0.length; i++) {
+    const b0 = team0[i];
+    const b1 = team1[i];
+    assert.equal(b0.x + b1.x, MAP_W - 1);
+    assert.equal(b0.y + b1.y, MAP_H - 1);
+  }
+
+  for (let i = 0; i < state.ghosts.length; i += 2) {
+    const g0 = state.ghosts[i];
+    const g1 = state.ghosts[i + 1];
+    assert.equal(g0.x + g1.x, MAP_W - 1);
+    assert.equal(g0.y + g1.y, MAP_H - 1);
+  }
+});
+
 test('step moves buster with speed limit', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
   const b = state.busters[0];
