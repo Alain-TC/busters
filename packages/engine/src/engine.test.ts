@@ -211,3 +211,44 @@ test('eject clamps ghost position to map bounds', () => {
   assert.equal(ejected.y, 0);
 });
 
+test('stunned buster cannot complete BUST action', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+  const ghost = state.ghosts[0];
+
+  attacker.x = 1000; attacker.y = 1000;
+  victim.x = attacker.x + RULES.STUN_RANGE - 1; victim.y = attacker.y;
+  ghost.x = victim.x; ghost.y = victim.y; ghost.endurance = 10;
+
+  const actions: ActionsByTeam = {
+    0: [{ type: 'STUN', busterId: victim.id }],
+    1: [{ type: 'BUST', ghostId: ghost.id }],
+  } as any;
+
+  const next = step(state, actions);
+
+  const gNext = next.ghosts[0];
+  assert.equal(gNext.endurance, 10);
+  assert.equal(gNext.engagedBy, 0);
+  const stunned = next.busters.find(b => b.id === victim.id)!;
+  assert.equal(stunned.state, 2);
+});
+
+test('stunned buster cannot use RADAR', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+
+  attacker.x = 1000; attacker.y = 1000;
+  victim.x = attacker.x + RULES.STUN_RANGE - 1; victim.y = attacker.y;
+
+  const actions: ActionsByTeam = {
+    0: [{ type: 'STUN', busterId: victim.id }],
+    1: [{ type: 'RADAR' }],
+  } as any;
+
+  const next = step(state, actions);
+  assert.ok(!(victim.id in next.radarNextVision));
+});
+
