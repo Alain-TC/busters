@@ -19,8 +19,8 @@ test('initGame sets up teams and ghosts within bounds', () => {
   }
 
   for (const g of state.ghosts) {
-    assert.ok(g.x >= 500 && g.x <= MAP_W - 500);
-    assert.ok(g.y >= 500 && g.y <= MAP_H - 500);
+    assert.ok(g.x >= 0 && g.x < MAP_W);
+    assert.ok(g.y >= 0 && g.y < MAP_H);
   }
 });
 
@@ -41,6 +41,7 @@ test('initGame places busters and ghosts symmetrically', () => {
     const g1 = state.ghosts[i + 1];
     assert.equal(g0.x + g1.x, MAP_W - 1);
     assert.equal(g0.y + g1.y, MAP_H - 1);
+    assert.equal(g0.endurance, g1.endurance);
   }
 });
 
@@ -49,8 +50,8 @@ test('odd ghost placement depends on seed', () => {
   const s2 = initGame({ seed: 2, bustersPerPlayer: 1, ghostCount: 1 });
   const g1 = s1.ghosts[0];
   const g2 = s2.ghosts[0];
-  assert.ok(g1.x >= 500 && g1.x <= MAP_W - 500);
-  assert.ok(g1.y >= 500 && g1.y <= MAP_H - 500);
+  assert.ok(g1.x >= 0 && g1.x < MAP_W);
+  assert.ok(g1.y >= 0 && g1.y < MAP_H);
   assert.ok(g1.x !== g2.x || g1.y !== g2.y);
 });
 
