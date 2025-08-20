@@ -99,6 +99,33 @@ test('stun drops carried ghost and sets cooldown', () => {
   assert.equal(next.ghosts[0].y, victim.y);
 });
 
+test('re-stunning resets stun timer to full duration', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 0 });
+  const [attacker1, attacker2] = state.busters.filter(b => b.teamId === 0);
+  const victim = state.busters.find(b => b.teamId === 1)!;
+
+  attacker1.x = attacker2.x = 1000;
+  attacker1.y = attacker2.y = 1000;
+  victim.x = attacker1.x + RULES.STUN_RANGE - 1; victim.y = attacker1.y;
+
+  // first stun
+  const first: ActionsByTeam = { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any;
+  const mid = step(state, first);
+  const afterFirst = mid.busters.find(b => b.id === victim.id)!;
+  assert.equal(afterFirst.value, RULES.STUN_DURATION - 1);
+
+  // wait one turn to reduce timer
+  const wait = step(mid, { 0: [], 1: [] } as any);
+  const afterWait = wait.busters.find(b => b.id === victim.id)!;
+  assert.equal(afterWait.value, RULES.STUN_DURATION - 2);
+
+  // second stun from another attacker
+  const second: ActionsByTeam = { 0: [undefined, { type: 'STUN', busterId: victim.id }], 1: [] } as any;
+  const end = step(wait, second);
+  const afterSecond = end.busters.find(b => b.id === victim.id)!;
+  assert.equal(afterSecond.value, RULES.STUN_DURATION - 1);
+});
+
 test('attempting BUST while carrying causes ghost escape without scoring', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters.find(bs => bs.teamId === 0)!;
