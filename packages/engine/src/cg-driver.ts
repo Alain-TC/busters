@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { initGame, step } from './engine';
 import { entitiesForTeam } from './perception';
-import { Action, TeamId, MAX_TICKS } from '@busters/shared';
+import { Action, TeamId, MAX_TICKS, GameState } from '@busters/shared';
 
 function parseAction(line: string): Action {
   const parts = line.trim().split(/\s+/);
@@ -37,6 +38,10 @@ async function readLines(rl: readline.Interface, count: number): Promise<string[
     };
     rl.on('line', onLine);
   });
+}
+
+export function shouldContinue(state: GameState): boolean {
+  return !(state.ghosts.length === 0 && state.busters.every(b => b.state !== 1));
 }
 
 async function main() {
@@ -82,13 +87,16 @@ async function main() {
     } as any;
 
     state = step(state, actions);
+    if (!shouldContinue(state)) break;
   }
 
   console.log(`Final scores: ${state.scores[0]} - ${state.scores[1]}`);
   bots.forEach(b => b.kill());
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
