@@ -2,6 +2,7 @@
 
 import type { BotModule } from "../types"; // If you don't have this, replace BotModule with: { meta?: any; act: Function }
 import { TUNE as BASE_TUNE, WEIGHTS as BASE_WEIGHTS } from "@busters/agents/hybrid-params";
+import { Fog } from "@busters/agents/fog";
 
 /** The flat param order (19 dims) used by CEM for Hybrid */
 export const ORDER = [
@@ -179,6 +180,8 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
 
   const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
   function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
+  const fog = new Fog();
+  let lastTick = Infinity;
 
   function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
     const map = new Map<number, Ent>();
@@ -277,6 +280,8 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       const me = obs.self;
       const m = M(me.id);
       const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
+      if (tick <= 1 && tick < lastTick) { mem.clear(); pMem.clear(); planTick = -1; fog.reset(); }
+      lastTick = tick;
 
       const { my: MY, enemy: EN } = resolveBases(ctx);
       const enemies = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
