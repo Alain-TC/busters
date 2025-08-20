@@ -320,7 +320,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       g.x = clamp(roundi(g.x + nx * RULES.GHOST_FLEE), 0, next.width - 1);
       g.y = clamp(roundi(g.y + ny * RULES.GHOST_FLEE), 0, next.height - 1);
     }
-    if (detectedNow.has(g.id)) next.lastSeenTickForGhost[g.id] = next.tick;
+    if (detectedNow.has(g.id)) next.lastSeenTickForGhost[g.id] = state.tick;
   }
 
   // 8) Timers
