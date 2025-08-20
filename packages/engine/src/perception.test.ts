@@ -66,3 +66,27 @@ test('entities are returned sorted by id', () => {
   const sorted = [...ids].sort((a, b) => a - b);
   assert.deepEqual(ids, sorted);
 });
+
+test('enemy stun cooldown is hidden', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const me = state.busters.find(b => b.teamId === 0)!;
+  const enemy = state.busters.find(b => b.teamId === 1)!;
+
+  // Ensure both busters see each other
+  me.x = 0; me.y = 0;
+  enemy.x = 0; enemy.y = 0;
+
+  me.stunCd = 5;
+  enemy.stunCd = 7;
+
+  // Neither buster is carrying, stunned or busting
+  me.state = 0;
+  enemy.state = 0;
+
+  const list = entitiesForTeam(state, 0);
+  const myEntity = list.find(e => e.id === me.id)!;
+  const enemyEntity = list.find(e => e.id === enemy.id)!;
+
+  assert.equal(myEntity.value, 5);
+  assert.equal(enemyEntity.value, 0);
+});
