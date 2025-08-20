@@ -90,22 +90,17 @@ export function entitiesForTeam(state: GameState, teamId: TeamId): EntityView[] 
     }
   }
 
-  const res: EntityView[] = [];
-  // Add own busters first (sorted by id for stability)
-  const ownSorted = my
-    .map(b => ({
-      id: b.id,
-      x: b.x,
-      y: b.y,
-      entityType: teamId,
-      state: b.state,
-      value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : b.stunCd
-    }))
-    .sort((a, b) => a.id - b.id);
-  res.push(...ownSorted);
+  // Collect all entities then sort globally by id to mirror CodinGame ordering
+  const own = my.map(b => ({
+    id: b.id,
+    x: b.x,
+    y: b.y,
+    entityType: teamId,
+    state: b.state,
+    value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : b.stunCd
+  }));
 
-  // Visible enemies
-  const enemiesSorted = Array.from(visibleEnemies.values())
+  const enemies = Array.from(visibleEnemies.values())
     .filter(b => b.teamId !== teamId)
     .map(b => ({
       id: b.id,
@@ -114,22 +109,18 @@ export function entitiesForTeam(state: GameState, teamId: TeamId): EntityView[] 
       entityType: b.teamId,
       state: b.state,
       value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : b.stunCd
-    }))
-    .sort((a, b) => a.id - b.id);
-  res.push(...enemiesSorted);
+    }));
 
-  // Visible ghosts
-  const ghostsSorted = Array.from(visibleGhosts.values())
-    .map(g => ({
-      id: g.id,
-      x: g.x,
-      y: g.y,
-      entityType: -1,
-      state: g.endurance,
-      value: g.engagedBy
-    }))
-    .sort((a, b) => a.id - b.id);
-  res.push(...ghostsSorted);
+  const ghosts = Array.from(visibleGhosts.values()).map(g => ({
+    id: g.id,
+    x: g.x,
+    y: g.y,
+    entityType: -1,
+    state: g.endurance,
+    value: g.engagedBy
+  }));
 
+  const res: EntityView[] = [...own, ...enemies, ...ghosts];
+  res.sort((a, b) => a.id - b.id);
   return res;
 }
