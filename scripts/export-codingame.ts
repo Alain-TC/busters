@@ -6,6 +6,7 @@
 
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { TUNE as TUNE_DEFAULT, WEIGHTS as WEIGHTS_DEFAULT } from "../packages/agents/hybrid-params";
 
 type Genome = { radarTurn: number; stunRange: number; releaseDist: number };
@@ -200,13 +201,17 @@ function coerceToTW(raw: any): TW {
 }
 
 function makeHybridBot(tw: TW): string {
+  // Build the full hybrid bot via the agents package bundler
+  execSync("pnpm --filter @busters/agents build:cg", { stdio: "inherit" });
+
+  const bundlePath = path.resolve("packages/agents/dist/hybrid-cg.js");
+  let code = fs.readFileSync(bundlePath, "utf8");
+
   const TUNE_STR = JSON.stringify(tw.TUNE, null, 2);
   const WEIGHTS_STR = JSON.stringify(tw.WEIGHTS, null, 2);
-  const templatePath = path.resolve("packages/agents/codingame-hybrid.js");
-  const template = fs.readFileSync(templatePath, "utf8");
-  return template
-    .replace(/const TUNE = [^;]*;/, `const TUNE = ${TUNE_STR} ;`)
-    .replace(/const WEIGHTS = [^;]*;/, `const WEIGHTS = ${WEIGHTS_STR} ;`);
+  code = code.replace(/var TUNE = {[^]*?};/, `var TUNE = ${TUNE_STR};`);
+  code = code.replace(/var WEIGHTS = {[^]*?};/, `var WEIGHTS = ${WEIGHTS_STR};`);
+  return code;
 }
 
 // ---------- Main ----------
