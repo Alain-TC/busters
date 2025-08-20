@@ -126,6 +126,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 2) Apply MOVE (all positions update before other effects)
   for (const b of next.busters) {
+    if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'MOVE') {
       const dx = a.x - b.x, dy = a.y - b.y; const d = Math.hypot(dx, dy);
@@ -154,6 +155,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 3) STUN resolution (resets stun duration; both drop any carried ghost)
   for (const b of next.busters) {
+    if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'STUN' && b.stunCd <= 0) {
       const target = busterById.get(a.busterId);
@@ -163,6 +165,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
           // Always reset stun timer to full duration
           target.state = 2;
           target.value = RULES.STUN_DURATION;
+          // cancel any action the target intended to perform this turn
+          intents.delete(target.id);
 
           // Both sides drop what they were carrying (start-of-tick)
           dropCarried(target, startCarry.get(target.id) ?? null);
@@ -177,6 +181,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 4) RELEASE / EJECT / RADAR
   for (const b of next.busters) {
+    if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'RADAR' && !b.radarUsed) {
       // RADAR applies next turn only
@@ -215,6 +220,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 5) If a buster is carrying and *attempts* BUST, its carried ghost escapes immediately (no scoring)
   for (const b of next.busters) {
+    if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'BUST' && (startCarry.get(b.id) ?? null) !== null) {
       const gid = startCarry.get(b.id)!;
@@ -235,6 +241,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   for (const g of next.ghosts) bustingByGhost.set(g.id, { byTeam: { 0: 0, 1: 0 } as any, closest: { 0: null, 1: null } });
 
   for (const b of next.busters) {
+    if (b.state === 2) continue;
     const a = intents.get(b.id);
     if (a?.type === 'BUST') {
       const g = ghostById.get(a.ghostId);
