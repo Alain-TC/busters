@@ -211,3 +211,24 @@ test('eject clamps ghost position to map bounds', () => {
   assert.equal(ejected.y, 0);
 });
 
+test('ghost begins fleeing one turn after detection', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const g = state.ghosts[0];
+  g.x = 5000;
+  g.y = 5000;
+  b.x = g.x;
+  b.y = g.y + RULES.VISION + 100;
+
+  const approach: ActionsByTeam = { 0: [{ type: 'MOVE', x: g.x, y: g.y }], 1: [] } as any;
+  const mid = step(state, approach);
+  const gMid = mid.ghosts[0];
+  assert.equal(gMid.x, g.x);
+  assert.equal(gMid.y, g.y);
+
+  const end = step(mid, { 0: [], 1: [] } as any);
+  const gEnd = end.ghosts[0];
+  assert.equal(gEnd.x, g.x);
+  assert.equal(gEnd.y, g.y - RULES.GHOST_FLEE);
+});
+
