@@ -61,10 +61,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // Keep "start-of-tick" facts for edge rules
   const startCarry = new Map<number, number | null>(); // busterId -> ghostId if carrying
-  const startStates = new Map<number, number>();       // busterId -> state at start
   for (const b of state.busters) {
     startCarry.set(b.id, b.state === 1 ? (b.value as number) : null);
-    startStates.set(b.id, b.state);
   }
 
   // Fast index by team
@@ -124,7 +122,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
     if (b.state === 1) { b.state = 0; b.value = 0; }
   }
 
-  // 3) STUN resolution (extends stunned by +10; both drop any carried ghost)
+  // 3) STUN resolution (resets stun duration; both drop any carried ghost)
   for (const b of next.busters) {
     const a = intents.get(b.id);
     if (a?.type === 'STUN' && b.stunCd <= 0) {
@@ -132,11 +130,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       if (target && target.teamId !== b.teamId) {
         const d = dist(b.x, b.y, target.x, target.y);
         if (d <= RULES.STUN_RANGE) {
-          // Extend or set stun
-          const wasStunned = startStates.get(target.id) === 2;
-          const prev = wasStunned ? (typeof target.value === 'number' ? (target.value as number) : 0) : 0;
+          // Always reset stun timer to full duration
           target.state = 2;
-          target.value = prev + RULES.STUN_DURATION;
+          target.value = RULES.STUN_DURATION;
 
           // Both sides drop what they were carrying (start-of-tick)
           dropCarried(target, startCarry.get(target.id) ?? null);
