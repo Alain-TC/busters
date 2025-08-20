@@ -155,21 +155,22 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   // 3) STUN resolution (resets stun duration; both drop any carried ghost)
   for (const b of next.busters) {
     const a = intents.get(b.id);
-    if (a?.type === 'STUN' && b.stunCd <= 0) {
-      const target = busterById.get(a.busterId);
-      if (target && target.teamId !== b.teamId) {
-        const d = dist(b.x, b.y, target.x, target.y);
-        if (d <= RULES.STUN_RANGE) {
-          // Always reset stun timer to full duration
-          target.state = 2;
-          target.value = RULES.STUN_DURATION;
+    if (a?.type === 'STUN') {
+      if (b.stunCd <= 0) {
+        // cooldown starts regardless of success
+        b.stunCd = RULES.STUN_COOLDOWN;
+        const target = busterById.get(a.busterId);
+        if (target && target.teamId !== b.teamId) {
+          const d = dist(b.x, b.y, target.x, target.y);
+          if (d <= RULES.STUN_RANGE) {
+            // Always reset stun timer to full duration
+            target.state = 2;
+            target.value = RULES.STUN_DURATION;
 
-          // Both sides drop what they were carrying (start-of-tick)
-          dropCarried(target, startCarry.get(target.id) ?? null);
-          dropCarried(b,      startCarry.get(b.id)      ?? null);
-
-          // cooldown
-          b.stunCd = RULES.STUN_COOLDOWN;
+            // Both sides drop what they were carrying (start-of-tick)
+            dropCarried(target, startCarry.get(target.id) ?? null);
+            dropCarried(b,      startCarry.get(b.id)      ?? null);
+          }
         }
       }
     }

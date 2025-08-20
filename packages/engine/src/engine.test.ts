@@ -119,6 +119,24 @@ test('stun drops carried ghost and sets cooldown', () => {
   assert.equal(next.ghosts[0].y, victim.y);
 });
 
+test('out-of-range STUN still consumes cooldown', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+
+  attacker.x = 1000; attacker.y = 1000;
+  victim.x = attacker.x + RULES.STUN_RANGE + 1; victim.y = attacker.y;
+
+  const actions: ActionsByTeam = { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any;
+  const next = step(state, actions);
+
+  const postAttacker = next.busters.find(b => b.id === attacker.id)!;
+  assert.equal(postAttacker.stunCd, RULES.STUN_COOLDOWN - 1);
+
+  const postVictim = next.busters.find(b => b.id === victim.id)!;
+  assert.equal(postVictim.state, 0);
+});
+
 test('re-stunning resets stun timer to full duration', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 0 });
   const [attacker1, attacker2] = state.busters.filter(b => b.teamId === 0);
