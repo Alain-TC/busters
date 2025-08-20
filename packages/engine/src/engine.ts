@@ -193,7 +193,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
           // (ghost was already removed from map when captured)
           b.state = 0; b.value = 0;
         } else {
-          // drop to ground (no score)
+          // drop to ground (-1 score)
+          next.scores[b.teamId] -= 1;
           const ghost = { id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 };
           next.ghosts.push(ghost);
           ghostById.set(gid, ghost);
