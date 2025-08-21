@@ -1,19 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
-import { parseAction } from './cg-driver';
+import { parseAction, readLines } from './cg-driver';
 import { TEAM0_BASE, RULES, MAX_TICKS } from '@busters/shared';
 import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
-import { readLines } from './cg-driver';
 
 test('parseAction parses WAIT as explicit action', () => {
   assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
 });
 
-test('parseAction returns undefined for malformed inputs', () => {
-  assert.equal(parseAction('MOVE 1000'), undefined);
-  assert.equal(parseAction('BUST notanid'), undefined);
+test('parseAction throws on malformed inputs', () => {
+  assert.throws(() => parseAction('MOVE 1000'));
+  assert.throws(() => parseAction('BUST notanid'));
 });
 
 test('loop ends when no ghosts remain and none are carried', () => {
@@ -35,24 +34,17 @@ test('loop ends when no ghosts remain and none are carried', () => {
   assert.equal(state.scores[0], 1);
 });
 
-test('driver proceeds when a bot exceeds the time limit', async () => {
-  const s0 = new PassThrough();
-  const s1 = new PassThrough();
-  const rl0 = readline.createInterface({ input: s0 });
-  const rl1 = readline.createInterface({ input: s1 });
-
-  const p0 = readLines(rl0, 2);
-  const p1 = readLines(rl1, 2);
+test('readLines rejects when a bot exceeds the time limit', async () => {
+  const s = new PassThrough();
+  const rl = readline.createInterface({ input: s });
   const start = Date.now();
 
-  s0.write('MOVE 1 2\n');
-  s0.write('BUST 3\n');
+  const promise = readLines(rl, 2);
+  s.write('MOVE 1 2\n');
 
-  const [lines0, lines1] = await Promise.all([p0, p1]);
-  rl0.close(); rl1.close(); s0.end(); s1.end();
+  await assert.rejects(promise);
+  rl.close(); s.end();
 
-  assert.deepEqual(lines0, ['MOVE 1 2', 'BUST 3']);
-  assert.deepEqual(lines1, ['WAIT', 'WAIT']);
   const elapsed = Date.now() - start;
   assert(elapsed >= 100 && elapsed < 1000);
 });

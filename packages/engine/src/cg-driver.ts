@@ -6,41 +6,53 @@ import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
 import { Action, TeamId, MAX_TICKS } from '@busters/shared';
 
-export function parseAction(line: string): Action | undefined {
+export function parseAction(line: string): Action {
   const parts = line.trim().split(/\s+/);
   const cmd = parts[0]?.toUpperCase();
   switch (cmd) {
-    case 'MOVE':
+    case 'MOVE': {
       const x = Number(parts[1]);
       const y = Number(parts[2]);
-      return Number.isFinite(x) && Number.isFinite(y)
-        ? { type: 'MOVE', x, y }
-        : undefined;
-    case 'BUST':
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        return { type: 'MOVE', x, y };
+      }
+      throw new Error(`Invalid MOVE command: ${line}`);
+    }
+    case 'BUST': {
       const ghostId = Number(parts[1]);
-      return Number.isFinite(ghostId) ? { type: 'BUST', ghostId } : undefined;
+      if (Number.isFinite(ghostId)) {
+        return { type: 'BUST', ghostId };
+      }
+      throw new Error(`Invalid BUST command: ${line}`);
+    }
     case 'RELEASE':
       return { type: 'RELEASE' };
-    case 'STUN':
+    case 'STUN': {
       const busterId = Number(parts[1]);
-      return Number.isFinite(busterId) ? { type: 'STUN', busterId } : undefined;
+      if (Number.isFinite(busterId)) {
+        return { type: 'STUN', busterId };
+      }
+      throw new Error(`Invalid STUN command: ${line}`);
+    }
     case 'RADAR':
       return { type: 'RADAR' };
-    case 'EJECT':
+    case 'EJECT': {
       const ex = Number(parts[1]);
       const ey = Number(parts[2]);
-      return Number.isFinite(ex) && Number.isFinite(ey)
-        ? { type: 'EJECT', x: ex, y: ey }
-        : undefined;
+      if (Number.isFinite(ex) && Number.isFinite(ey)) {
+        return { type: 'EJECT', x: ex, y: ey };
+      }
+      throw new Error(`Invalid EJECT command: ${line}`);
+    }
     case 'WAIT':
       return { type: 'WAIT' };
     default:
-      return undefined;
+      throw new Error(`Unknown command: ${line}`);
   }
 }
 
 export async function readLines(rl: readline.Interface, count: number): Promise<string[]> {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const lines: string[] = [];
     const onLine = (line: string) => {
       lines.push(line.trim());
@@ -55,10 +67,8 @@ export async function readLines(rl: readline.Interface, count: number): Promise<
       rl.removeListener('line', onLine);
       if (lines.length < count) {
         const missing = count - lines.length;
-        console.warn(`Timed out waiting for ${missing} line(s)`);
-        while (lines.length < count) lines.push('WAIT');
+        reject(new Error(`Timed out waiting for ${missing} line(s)`));
       }
-      resolve(lines);
     }, 100);
 
     rl.on('line', onLine);
@@ -116,6 +126,7 @@ async function main() {
     w.write(`${t}\n`);
   }
 
+  let forfeit: TeamId | null = null;
   while (state.tick < MAX_TICKS) {
     for (const t of [0, 1] as TeamId[]) {
       const entities = entitiesForTeam(state, t);
@@ -126,15 +137,32 @@ async function main() {
       }
     }
 
-    const [lines0, lines1] = await Promise.all([
-      readLines(readers[0], state.bustersPerPlayer),
-      readLines(readers[1], state.bustersPerPlayer)
+    const [r0, r1] = await Promise.all([
+      readLines(readers[0], state.bustersPerPlayer).then(lines => ({ lines })).catch(() => ({ lines: null })),
+      readLines(readers[1], state.bustersPerPlayer).then(lines => ({ lines })).catch(() => ({ lines: null }))
     ]);
 
-    const actions: ActionsByTeam = {
-      0: lines0.map(parseAction),
-      1: lines1.map(parseAction)
-    };
+    if (r0.lines === null || r1.lines === null) {
+      forfeit = r0.lines === null ? 0 : 1;
+      break;
+    }
+
+    let actions0: Action[];
+    let actions1: Action[];
+    try {
+      actions0 = r0.lines.map(parseAction);
+    } catch {
+      forfeit = 0;
+      break;
+    }
+    try {
+      actions1 = r1.lines.map(parseAction);
+    } catch {
+      forfeit = 1;
+      break;
+    }
+
+    const actions: ActionsByTeam = { 0: actions0, 1: actions1 };
 
     state = step(state, actions);
     if (state.ghosts.length === 0 && !state.busters.some(b => b.state === 1)) {
@@ -142,6 +170,9 @@ async function main() {
     }
   }
 
+  if (forfeit !== null) {
+    console.log(`Bot ${forfeit} forfeits`);
+  }
   console.log(`Final scores: ${state.scores[0]} - ${state.scores[1]}`);
   bots.forEach(b => b.kill());
 }
