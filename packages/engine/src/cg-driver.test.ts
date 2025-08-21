@@ -11,6 +11,16 @@ test('parseAction parses WAIT as explicit action', () => {
   assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
 });
 
+test('parseAction parses all valid commands', () => {
+  assert.deepEqual(parseAction('MOVE 10 20'), { type: 'MOVE', x: 10, y: 20 });
+  assert.deepEqual(parseAction('BUST 3'), { type: 'BUST', ghostId: 3 });
+  assert.deepEqual(parseAction('RELEASE'), { type: 'RELEASE' });
+  assert.deepEqual(parseAction('STUN 4'), { type: 'STUN', busterId: 4 });
+  assert.deepEqual(parseAction('RADAR'), { type: 'RADAR' });
+  assert.deepEqual(parseAction('EJECT 1 2'), { type: 'EJECT', x: 1, y: 2 });
+  assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
+});
+
 test('parseAction returns undefined for malformed inputs', () => {
   assert.equal(parseAction('MOVE 1000'), undefined);
   assert.equal(parseAction('BUST notanid'), undefined);
