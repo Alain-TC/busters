@@ -107,3 +107,15 @@ test('bot does not stun an already stunned enemy', () => {
   action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 });
+
+test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
+  __mem.clear();
+  const b: any = { id: 1, x: 0, y: 0 };
+  const task: any = { type: 'SUPPORT', target: { x: 0, y: 0 }, payload: { allyIds: [2] }, baseScore: 0 };
+  const enemies: any[] = [{ id: 3, x: 0, y: 0 }];
+  const MY = { x: 0, y: 0 };
+  let s1 = __scoreAssign(b, task, enemies, MY, 0);
+  __mem.get(1)!.stunReadyAt = 5;
+  let s2 = __scoreAssign(b, task, enemies, MY, 0);
+  assert.ok(s1 > s2);
+});
