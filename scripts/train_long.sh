@@ -14,6 +14,7 @@ ART_DIR="packages/sim-runner/artifacts"
 RESET_ELO=0
 TAG="run"
 SUBJECT="hybrid"
+REQUIRE_PFSP_LOG=${REQUIRE_PFSP_LOG:-0}
 
 # ========= Args =========
 while [[ $# -gt 0 ]]; do
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
     --reset-elo) RESET_ELO=1; shift ;;
     --tag) TAG="$2"; shift 2 ;;
     --subject) SUBJECT="$2"; shift 2 ;;
+    --require-pfsp-log) REQUIRE_PFSP_LOG=1; shift ;;
     -h|--help)
       cat <<USAGE
 Usage: scripts/train_long.sh [options]
@@ -45,6 +47,7 @@ Options:
   --subject NAME       training subject (default: $SUBJECT)
   --reset-elo          delete Elo + PFSP logs before training
   --tag NAME           label for saved outputs (default: $TAG)
+  --require-pfsp-log   fail if PFSP log is missing
   -h, --help           show this help
 USAGE
       exit 0 ;;
@@ -90,7 +93,14 @@ PFSP_LOG_PATH="$PFSP_LOG" pnpm -C packages/sim-runner start train \
 # ========= Reports =========
 echo ">> PFSP report"
 SUMMARY_FILE="$ART_DIR/pfsp_summary_${TS}_${TAG}.txt"
-pnpm pfsp:report "$PFSP_LOG" | tee "$SUMMARY_FILE"
+if [[ -f "$PFSP_LOG" ]]; then
+  pnpm pfsp:report "$PFSP_LOG" | tee "$SUMMARY_FILE"
+else
+  echo "NOTICE: PFSP log $PFSP_LOG not found; skipping report"
+  if [[ "$REQUIRE_PFSP_LOG" == "1" ]]; then
+    exit 1
+  fi
+fi
 
 # ========= Artifacts / Exports =========
 case "$SUBJECT" in
