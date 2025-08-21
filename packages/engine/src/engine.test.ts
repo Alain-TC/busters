@@ -148,6 +148,28 @@ test('release outside base decrements score', () => {
   assert.equal(dropped.y, b.y);
 });
 
+test('release inside opponent base awards opponent and penalizes releaser', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  b.x = 1000; b.y = 1000;
+  const ghost = state.ghosts[0];
+  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+
+  const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, capture);
+
+  const carrier = mid.busters[0];
+  carrier.x = TEAM1_BASE.x; carrier.y = TEAM1_BASE.y;
+
+  const release: ActionsByTeam = { 0: [{ type: 'RELEASE' }], 1: [] } as any;
+  const end = step(mid, release);
+  const bEnd = end.busters[0];
+  assert.equal(end.scores[1], 1);
+  assert.equal(end.scores[0], -1);
+  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.value, 0);
+});
+
 test('stun drops carried ghost and sets cooldown', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const attacker = state.busters.find(b => b.teamId === 0)!;
