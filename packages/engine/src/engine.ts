@@ -293,7 +293,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       const g = ghostById.get(a.ghostId);
       if (!g) continue;
       const d = dist(b.x, b.y, g.x, g.y);
-      if (d >= RULES.BUST_MIN && d <= RULES.BUST_MAX) {
+      if (d > RULES.BUST_MIN && d < RULES.BUST_MAX) {
         const acc = bustingByGhost.get(g.id)!;
         acc.byTeam[b.teamId] += 1;
         const d2curr = dist2(b.x, b.y, g.x, g.y);

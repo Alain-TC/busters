@@ -97,7 +97,7 @@ test('step captures ghost when endurance drops to zero', () => {
   const b = state.busters.find(bs => bs.teamId === 0)!;
   b.x = 1000; b.y = 1000;
   const ghost = state.ghosts[0];
-  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+  ghost.x = b.x + RULES.BUST_MIN + 1; ghost.y = b.y; ghost.endurance = 1;
   const actions: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
   const next = step(state, actions);
   const carrier = next.busters[0];
@@ -106,12 +106,29 @@ test('step captures ghost when endurance drops to zero', () => {
   assert.equal(carrier.value, ghost.id);
 });
 
+test('busters cannot bust at boundary distances', () => {
+  const attempt = (distance: number) => {
+    const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+    const b = state.busters[0];
+    b.x = 1000; b.y = 1000;
+    const ghost = state.ghosts[0];
+    ghost.x = b.x + distance; ghost.y = b.y; ghost.endurance = 1;
+    const next = step(state, { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any);
+    const bNext = next.busters[0];
+    assert.equal(next.ghosts.length, 1);
+    assert.equal(next.ghosts[0].endurance, 1);
+    assert.equal(bNext.state, 0);
+  };
+  attempt(RULES.BUST_MIN);
+  attempt(RULES.BUST_MAX);
+});
+
 test('step scores when releasing carried ghost in base', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters[0];
   b.x = TEAM0_BASE.x; b.y = TEAM0_BASE.y;
   const ghost = state.ghosts[0];
-  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+  ghost.x = b.x + RULES.BUST_MIN + 1; ghost.y = b.y; ghost.endurance = 1;
 
   const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
   const mid = step(state, capture);
@@ -130,7 +147,7 @@ test('release outside base decrements score', () => {
   // start outside base
   b.x = TEAM0_BASE.x + RULES.BASE_RADIUS + RULES.BUST_MIN + 10; b.y = TEAM0_BASE.y;
   const ghost = state.ghosts[0];
-  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+  ghost.x = b.x + RULES.BUST_MIN + 1; ghost.y = b.y; ghost.endurance = 1;
 
   const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
   const mid = step(state, capture);
@@ -432,7 +449,7 @@ test('busting state persists into next turn until another action', () => {
   const b = state.busters[0];
   const ghost = state.ghosts[0];
   b.x = 1000; b.y = 1000;
-  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 2;
+  ghost.x = b.x + RULES.BUST_MIN + 1; ghost.y = b.y; ghost.endurance = 2;
 
   const bust: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
   const mid = step(state, bust);
