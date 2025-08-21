@@ -1,5 +1,7 @@
 // packages/sim-runner/src/loadBots.ts
 
+import path from "path";
+
 export type Bot = {
   meta?: { name?: string; [k: string]: any };
   act: (ctx: any, obs: any) => any;
@@ -24,6 +26,11 @@ function guessNameFromSpec(spec: string) {
 /** Normalize a user token into an importable spec */
 export function resolveSpec(token: string): string {
   if (!token) return token;
+  if (token.startsWith("hof:")) {
+    const tag = token.slice(4);
+    const file = tag.endsWith(".js") ? tag : `${tag}.js`;
+    return path.resolve(process.cwd(), "../agents/hof", file);
+  }
   // if already a path or scoped package, keep as-is
   if (token.startsWith("@") || token.startsWith(".") || token.startsWith("/")) return token;
   // else try alias

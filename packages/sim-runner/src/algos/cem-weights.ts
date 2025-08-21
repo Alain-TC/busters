@@ -3,6 +3,8 @@
  *  - sample vectors, map to weights via vecToWeights, run PFSP eval producing fitness,
  *    update mean/cov, repeat.
  */
+import fs from "fs";
+import path from "path";
 import { vecToWeights, weightsToVec } from "../genomes/weightsGenome";
 import { DEFAULT_WEIGHTS, type Weights } from "../../../agents/weights";
 import { selectOpponentsPFSP } from "../pfsp";
@@ -18,6 +20,7 @@ export type TrainOpts = {
   seed: number;
   oppPool: string[];
   evaluate: (w: Weights, oppId: string) => Promise<number>;
+  artifactsDir?: string;
 };
 
 /** Train weights using a simple diagonal-covariance CEM loop. */
@@ -28,6 +31,8 @@ export async function trainCemWeights(opts: TrainOpts) {
   let mean = weightsToVec(DEFAULT_WEIGHTS);
   let cov = new Array(DIM).fill(1);
   const eliteCount = Math.max(1, Math.floor(pop * elitePct));
+  let bestFit = -Infinity;
+  let bestVec: number[] | null = null;
 
   for (let g = 0; g < gens; g++) {
     // --- Sample population ---
@@ -50,10 +55,26 @@ export async function trainCemWeights(opts: TrainOpts) {
     }
     evals.sort((a, b) => b.fit - a.fit);
 
+    // track best genome across training
+    const top = evals[0];
+    if (top && top.fit > bestFit) {
+      bestFit = top.fit;
+      bestVec = popVecs[top.idx];
+    }
+
     // --- Update mean & covariance from elites ---
     const elites = evals.slice(0, eliteCount).map((e) => popVecs[e.idx]);
     mean = vecMean(elites);
     cov = vecVar(elites, mean);
+  }
+
+  if (opts.artifactsDir && bestVec) {
+    const artDir = path.resolve(process.cwd(), opts.artifactsDir);
+    fs.mkdirSync(artDir, { recursive: true });
+    const bestWeights = vecToWeights(bestVec);
+    fs.writeFileSync(path.join(artDir, "simrunner_best_genome.json"), JSON.stringify(bestWeights, null, 2));
+    const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "Z");
+    fs.writeFileSync(path.join(artDir, `genome_${ts}.json`), JSON.stringify(bestWeights, null, 2));
   }
 
   return { mean, cov };
