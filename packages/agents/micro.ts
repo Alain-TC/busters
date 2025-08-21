@@ -94,3 +94,10 @@ export function releaseBlockDelta(opts: {
   return delta;
 }
 
+/** Simple additive scoring helper for candidate actions. */
+export type CandidateScore = { base: number; deltas?: number[] };
+export function scoreCandidate(c: CandidateScore): number {
+  const micro = c.deltas ? c.deltas.reduce((s, v) => s + v, 0) : 0;
+  return c.base + micro;
+}
+
