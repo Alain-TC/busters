@@ -20,9 +20,9 @@ let tick = 0;
 // Track which of our busters already used RADAR (simple local memory)
 const radarUsed = new Set<number>();
 
-const first = readline().split(" ").map(Number);
-const bustersPerPlayer = first[0];
-const myTeamId = first[2];
+const bustersPerPlayer = parseInt(readline(), 10);
+const ghostCount = parseInt(readline(), 10); // value may remain unused
+const myTeamId = parseInt(readline(), 10);
 
 const myBase: Pt = myTeamId === 0 ? { x: 0, y: 0 } : { x: W, y: H };
 const enemyBase: Pt = myTeamId === 0 ? { x: W, y: H } : { x: 0, y: 0 };
