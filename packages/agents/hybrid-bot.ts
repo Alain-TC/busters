@@ -188,6 +188,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
 /** tiny patrol memory for exploration */
 const pMem = new Map<number, { wp: number }>();
+export const __pMem = pMem; // exposed for tests
 function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
@@ -266,7 +267,13 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
-  if (tick <= 1 && tick < lastTick) { mem.clear(); fog.reset(); }
+  if (tick <= 1 && tick < lastTick) {
+    mem.clear();
+    pMem.clear();
+    planTick = -1;
+    planAssign.clear();
+    fog.reset();
+  }
   lastTick = tick;
   const me = obs.self;
   const m = M(me.id);

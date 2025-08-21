@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem } from './hybrid-bot';
+import { act, __mem, __pMem } from './hybrid-bot';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
@@ -15,4 +15,18 @@ test('mem resets on new match and repopulates', () => {
   const nextObs: any = { tick: 2, self: { id: 2, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, nextObs);
   assert.ok(__mem.has(1) && __mem.has(2));
+});
+
+test('patrol indices reset on new match', () => {
+  // seed patrol memory with stale waypoint
+  __pMem.set(1, { wp: 3 });
+  __pMem.set(99, { wp: 2 });
+
+  const ctx: any = {};
+  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  act(ctx, obs);
+
+  // old entries cleared and waypoint reset to zero
+  assert.equal(__pMem.get(1)?.wp, 0);
+  assert.ok(!__pMem.has(99));
 });
