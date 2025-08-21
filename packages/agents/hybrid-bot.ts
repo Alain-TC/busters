@@ -4,7 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
-import { HybridState, getState } from "./lib/state";
+import { HybridState, getState, Role } from "./lib/state";
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -103,6 +103,13 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
+const ROLE_PRIORITY: Record<Role, TaskType> = {
+  SCOUT: "EXPLORE",
+  BLOCKER: "BLOCK",
+};
+
+const ROLE_BONUS = 5;
+
 /** Shared per-tick plan cache (computed once, read by all) */
 let planTick = -1;
 let planAssign = new Map<number, Task>(); // busterId -> task
@@ -114,10 +121,23 @@ function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
   return Array.from(map.values());
 }
 
+function ensureRoles(state: HybridState, team: Ent[]) {
+  const sorted = team.slice().sort((a, b) => a.id - b.id);
+  for (let i = 0; i < sorted.length; i++) {
+    const id = sorted[i].id;
+    if (!state.getRole(id)) {
+      const role: Role = i === 0 ? "BLOCKER" : "SCOUT";
+      state.setRole(id, role);
+    }
+  }
+}
+
 function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
   const tasks: Task[] = [];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
+  const team = uniqTeam(meObs.self, meObs.friends);
+  ensureRoles(state, team);
 
   // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
@@ -160,17 +180,18 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
   }
 
-  // BLOCK enemy base (if no carriers seen)
-  if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
+  // BLOCK enemy base (if no carriers seen) and we have a blocker role
+  if (team.some(b => state.getRole(b.id) === "BLOCKER") && !enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
     tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
   // EXPLORE: coarse frontier via shared state (fallback to patrols)
-  const team = uniqTeam(meObs.self, meObs.friends);
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
+    const role = state.getRole(mate.id);
     let target: Pt | undefined;
     let baseScore = WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD;
+    if (role === "SCOUT") baseScore += ROLE_BONUS;
     const payload: any = { id: mate.id };
     if (!early) {
       const fr = fog.frontier(mate);
@@ -197,10 +218,13 @@ export const __pMem = pMem; // exposed for tests
 function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
-function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): number {
+function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, state: HybridState): number {
   const baseD = dist(b.x, b.y, t.target.x, t.target.y);
   let s = t.baseScore - baseD * WEIGHTS.DIST_PEN;
   const canStunMe = M(b.id).stunReadyAt <= tick;
+
+  const role = state.getRole(b.id);
+  if (role && ROLE_PRIORITY[role] === t.type) s += ROLE_BONUS;
 
   if (t.type === "INTERCEPT") {
     const enemy = enemies.find(e => e.id === t.payload?.enemyId);
@@ -244,7 +268,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
 }
 
 /** Greedy auction: assigns at most one task per buster (fast & fine here) */
-function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number): Map<number, Task> {
+function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number, state: HybridState): Map<number, Task> {
   const assigned = new Map<number, Task>();
   const freeB = new Set(team.map(b => b.id));
   const freeT = new Set(tasks.map((_, i) => i));
@@ -253,7 +277,7 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
   const S: { b: number; t: number; s: number }[] = [];
   for (let bi = 0; bi < team.length; bi++) {
     for (let ti = 0; ti < tasks.length; ti++) {
-      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick) });
+      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick, state) });
     }
   }
   S.sort((a, b) => b.s - a.s);
@@ -363,7 +387,7 @@ export function act(ctx: Ctx, obs: Obs) {
   if (planTick !== tick) {
     const team = friends; // includes self
     const tasks = buildTasks(ctx, obs, state, MY, EN);
-    planAssign = runAuction(team, tasks, enemiesAll, MY, tick);
+    planAssign = runAuction(team, tasks, enemiesAll, MY, tick, state);
     planTick = tick;
   }
 

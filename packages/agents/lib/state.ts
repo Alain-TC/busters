@@ -7,6 +7,8 @@
 
 export type Pt = { x: number; y: number };
 
+export type Role = "SCOUT" | "BLOCKER";
+
 const MAP_W = 16000, MAP_H = 9000; // safe defaults
 // How long to remember enemies (in ticks) before dropping them
 export const DEFAULT_ENEMY_MAX_AGE = 40;
@@ -38,6 +40,9 @@ export class HybridState {
   // Enemy last-seen
   enemies = new Map<number, EnemySeen>();
   enemyMaxAge: number;
+
+  // Per-buster role assignments
+  roles = new Map<number, Role>();
 
   constructor(
     bounds?: { w?: number; h?: number },
@@ -192,6 +197,14 @@ export class HybridState {
     for (const [id, e] of this.enemies) {
       if (currentTick - e.lastTick > maxAge) this.enemies.delete(id);
     }
+  }
+
+  getRole(id: number): Role | undefined {
+    return this.roles.get(id);
+  }
+
+  setRole(id: number, role: Role) {
+    this.roles.set(id, role);
   }
 
   trackEnemies(enemies?: any[], tick?: number) {

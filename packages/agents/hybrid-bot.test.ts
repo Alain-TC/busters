@@ -62,3 +62,10 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
   const after = (f as any).heat[idx];
   assert.ok(after < before);
 });
+
+test('HybridState stores role assignments', () => {
+  const st = new HybridState();
+  st.setRole(7, 'BLOCKER');
+  assert.equal(st.getRole(7), 'BLOCKER');
+  assert.equal(st.getRole(8), undefined);
+});
