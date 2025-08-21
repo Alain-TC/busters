@@ -10,6 +10,7 @@ import {
   duelStunDelta,
   contestedBustDelta,
   releaseBlockDelta,
+  scoreCandidate,
 } from "./micro";
 import { hungarian } from "./hungarian";
 
@@ -391,37 +392,108 @@ export function act(ctx: Ctx, obs: Obs) {
   const myTask = planAssign.get(me.id);
 
   if (myTask) {
+    const candidates: { act: any; base: number; deltas: number[]; tag: string; reason?: string }[] = [];
+
     if (myTask.type === "BUST" && ghosts.length) {
       const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];
       const r = dist(me.x, me.y, g.x, g.y);
-      if (r >= BUST_MIN && r <= BUST_MAX) return dbg({ type: "BUST", ghostId: g.id }, "BUST_RING", "task_bust");
-      const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
-      return dbg({ type: "MOVE", x: chase.x, y: chase.y }, "TASK_BUST_CHASE", "to_ghost");
+      if (r >= BUST_MIN && r <= BUST_MAX) {
+        candidates.push({
+          act: { type: "BUST", ghostId: g.id },
+          base: 100,
+          deltas: [
+            contestedBustDelta({
+              me,
+              ghost: { x: g.x, y: g.y, id: g.id },
+              enemies: enemiesAll,
+              bustMin: BUST_MIN,
+              bustMax: BUST_MAX,
+              stunRange: TUNE.STUN_RANGE,
+              canStunMe: canStun,
+            }),
+          ],
+          tag: "BUST_RING",
+          reason: "task_bust",
+        });
+      }
+      const ringR = (BUST_MIN + BUST_MAX) / 2;
+      for (let i = 0; i < 8; i++) {
+        const ang = (Math.PI * 2 * i) / 8;
+        const px = clamp(g.x + Math.cos(ang) * ringR, 0, W);
+        const py = clamp(g.y + Math.sin(ang) * ringR, 0, H);
+        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const sim = { id: me.id, x: P.x, y: P.y } as Ent;
+        const delta = contestedBustDelta({
+          me: sim,
+          ghost: { x: g.x, y: g.y, id: g.id },
+          enemies: enemiesAll,
+          bustMin: BUST_MIN,
+          bustMax: BUST_MAX,
+          stunRange: TUNE.STUN_RANGE,
+          canStunMe: canStun,
+        });
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [delta], tag: "MOVE_RING", reason: `a${i}` });
+      }
     }
 
     if (myTask.type === "INTERCEPT") {
       const enemy = enemiesAll.find(e => e.id === myTask.payload?.enemyId);
-      if (enemy) {
-        const P = estimateInterceptPoint(me, enemy, MY);
-        const tgt = spacedTarget(me, P, friends);
-        return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "est_int");
+      const center = enemy ? estimateInterceptPoint(me, enemy, MY) : myTask.target;
+      const radius = 400;
+      for (let i = 0; i < 6; i++) {
+        const ang = (Math.PI * 2 * i) / 6;
+        const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
+        const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
+        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const sim = { id: me.id, x: P.x, y: P.y } as Ent;
+        const deltas: number[] = [];
+        if (enemy) {
+          deltas.push(
+            releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE })
+          );
+        }
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas, tag: "MOVE_INT", reason: `a${i}` });
       }
-      const tgt = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "midpoint");
+      if (enemy && (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= TUNE.STUN_RANGE && canStun) {
+        const delta = duelStunDelta({
+          me,
+          enemy,
+          canStunMe: true,
+          canStunEnemy: enemy.state !== 2,
+          stunRange: TUNE.STUN_RANGE,
+        });
+        candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "intercept" });
+      }
     }
 
-    if (myTask.type === "DEFEND") {
-      const tgt = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "DEFEND", "near_base");
-    }
+    if (myTask.type === "DEFEND" || myTask.type === "BLOCK" || myTask.type === "EXPLORE") {
+      const center = myTask.target;
+      const radius = 400;
+      for (let i = 0; i < 6; i++) {
+        const ang = (Math.PI * 2 * i) / 6;
+        const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
+        const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
+        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: `MOVE_${myTask.type}`, reason: `a${i}` });
+      }
 
-    if (myTask.type === "BLOCK") {
-      const hold = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: hold.x, y: hold.y }, "BLOCK", "enemy_ring");
-    }
+      if (myTask.type === "BLOCK") {
+        const carrier = enemiesAll.find(e => e.state === 1);
+        if (carrier) {
+          const delta = releaseBlockDelta({ blocker: me, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
+          candidates.push({ act: { type: "MOVE", x: center.x, y: center.y }, base: 100, deltas: [delta], tag: "BLOCK_CORE" });
+        }
+      }
 
-    if (myTask.type === "EXPLORE") {
-      if (myTask.payload?.wp !== undefined) {
+      if (myTask.type === "DEFEND") {
+        const near = enemies.filter(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS).length * 0.2;
+        candidates.push({ act: { type: "MOVE", x: center.x, y: center.y }, base: 100, deltas: [near], tag: "DEFEND_CORE" });
+      }
+
+      if (myTask.type === "EXPLORE" && myTask.payload?.wp !== undefined) {
         const mateId = myTask.payload?.id ?? me.id;
         const Mx = MPatrol(mateId);
         const path = PATROLS[((me as any).localIndex ?? 0) % PATROLS.length];
@@ -429,10 +501,16 @@ export function act(ctx: Ctx, obs: Obs) {
         if (dist(me.x, me.y, cur.x, cur.y) < 800) Mx.wp = (Mx.wp + 1) % path.length;
         const next = path[Mx.wp % path.length];
         const P = spacedTarget(me, next, friends);
-        return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", `wp_${Mx.wp}`);
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: "EXPLORE_WP", reason: `wp_${Mx.wp}` });
       }
-      const P = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", "frontier");
+    }
+
+    if (candidates.length) {
+      const scored = candidates.map(c => ({ s: scoreCandidate({ base: c.base, deltas: c.deltas }), c }));
+      scored.sort((a, b) => b.s - a.s);
+      const best = scored[0].c;
+      return dbg(best.act, best.tag, best.reason);
     }
   }
 
