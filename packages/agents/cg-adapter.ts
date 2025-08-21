@@ -2,7 +2,7 @@
    Assumptions (standard Busters):
    - First line: bustersPerPlayer ghostCount myTeamId
    - Each turn: entityCount, then {id x y type state value} per entity
-   - type: 0=GHOST, 1=ALLY, 2=ENEMY
+   - type: -1=GHOST, 0/1=team ids
    - Our act() expects: { self, ghostsVisible[], enemies[], tick } and ctx with bases.
    - We track radarUsed locally (CG doesn’t give it).
 */
@@ -41,8 +41,8 @@ while (true) {
   for (let i = 0; i < n; i++) {
     const [idS, xS, yS, tS, sS, vS] = readline().split(" ");
     const id = +idS, x = +xS, y = +yS, type = +tS, state = +sS, value = +vS;
-    if (type === 1) my.push({ id, x, y, state, value });
-    else if (type === 2) opp.push({ id, x, y, state, value });
+    if (type === myTeamId) my.push({ id, x, y, state, value });
+    else if (type === 1 - myTeamId) opp.push({ id, x, y, state, value });
     else ghosts.push({ id, x, y, stamina: state, value });
   }
 
