@@ -1,7 +1,6 @@
 # ignore build and generated outputs
 node_modules
 *.log
-packages/sim-runner/artifacts/
 packages/viewer/public/replays/
 my_cg_bot.js
 
@@ -11,7 +10,6 @@ dist/
 *.log
 
 # training outputs
-packages/sim-runner/artifacts/
 packages/viewer/public/replays/
 my_cg_bot.js
 

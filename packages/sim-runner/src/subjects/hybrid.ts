@@ -4,8 +4,11 @@ import type { BotModule } from "../types"; // If you don't have this, replace Bo
 import { TUNE as BASE_TUNE, WEIGHTS as BASE_WEIGHTS } from "@busters/agents/hybrid-params";
 import { Fog } from "@busters/agents/fog";
 
-/** The flat param order (19 dims) used by CEM for Hybrid */
-export const ORDER = [
+// Automatically derive weight keys so ORDER always includes all weights
+const WEIGHT_KEYS = Object.keys(BASE_WEIGHTS) as (keyof typeof BASE_WEIGHTS)[];
+
+/** The flat param order (TUNE + all WEIGHTS) used for Hybrid evolution */
+export const ORDER: readonly string[] = [
   // TUNE (9)
   "TUNE.RELEASE_DIST",
   "TUNE.STUN_RANGE",
@@ -16,18 +19,9 @@ export const ORDER = [
   "TUNE.BLOCK_RING",
   "TUNE.DEFEND_RADIUS",
   "TUNE.EXPLORE_STEP_REWARD",
-  // WEIGHTS (10)
-  "WEIGHTS.BUST_BASE",
-  "WEIGHTS.BUST_RING_BONUS",
-  "WEIGHTS.BUST_ENEMY_NEAR_PEN",
-  "WEIGHTS.INTERCEPT_BASE",
-  "WEIGHTS.INTERCEPT_DIST_PEN",
-  "WEIGHTS.DEFEND_BASE",
-  "WEIGHTS.DEFEND_NEAR_BONUS",
-  "WEIGHTS.BLOCK_BASE",
-  "WEIGHTS.EXPLORE_BASE",
-  "WEIGHTS.DIST_PEN",
-] as const;
+  // WEIGHTS
+  ...WEIGHT_KEYS.map(k => `WEIGHTS.${k}`),
+];
 
 type Pt = { x: number; y: number };
 type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number };

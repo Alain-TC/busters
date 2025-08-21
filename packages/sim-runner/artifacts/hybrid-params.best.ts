@@ -1,0 +1,30 @@
+/** Baseline Hybrid parameters used before training.
+ *  Auto-generated files produced by `cli.ts train` will overwrite this. */
+
+export const TUNE = {
+  RELEASE_DIST: 1600,
+  STUN_RANGE: 1760,
+  RADAR1_TURN: 2,
+  RADAR2_TURN: 55,
+  SPACING: 900,
+  SPACING_PUSH: 280,
+  BLOCK_RING: 1750,
+  DEFEND_RADIUS: 3200,
+  EXPLORE_STEP_REWARD: 1.0,
+} as const;
+
+export const WEIGHTS = {
+  BUST_BASE: 12,
+  BUST_RING_BONUS: 5,
+  BUST_ENEMY_NEAR_PEN: 3,
+  INTERCEPT_BASE: 14,
+  INTERCEPT_DIST_PEN: 0.004,
+  DEFEND_BASE: 10,
+  DEFEND_NEAR_BONUS: 6,
+  BLOCK_BASE: 6,
+  EXPLORE_BASE: 4,
+  DIST_PEN: 0.003,
+} as const;
+
+export default { TUNE, WEIGHTS };
+
