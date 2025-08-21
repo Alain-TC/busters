@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem } from './hybrid-bot';
+import { act, __mem, __pMem, __runAuction, __scoreAssign } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
+import { hungarian } from './hungarian';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
@@ -61,4 +62,31 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
   f.markVisited({ x: 8000, y: 4500 });
   const after = (f as any).heat[idx];
   assert.ok(after < before);
+});
+
+test('runAuction aligns with Hungarian optimal assignment', () => {
+  const team = [
+    { id: 1, x: 0, y: 0 },
+    { id: 2, x: 3000, y: 0 },
+  ];
+  const tasks = [
+    { type: 'EXPLORE', target: { x: 1000, y: 0 }, baseScore: 4 },
+    { type: 'EXPLORE', target: { x: 3500, y: 0 }, baseScore: 4 },
+    { type: 'EXPLORE', target: { x: 2000, y: 0 }, baseScore: 4 },
+  ];
+  const enemies: any[] = [];
+  const MY = { x: 0, y: 0 };
+  const tick = 0;
+
+  const cost = team.map(b => tasks.map(t => -__scoreAssign(b as any, t as any, enemies, MY, tick)));
+  const expected = hungarian(cost);
+  const assigned = __runAuction(team as any, tasks as any, enemies, MY, tick);
+  for (let i = 0; i < team.length; i++) {
+    const tIdx = expected[i];
+    if (tIdx >= 0) {
+      assert.strictEqual(assigned.get(team[i].id), tasks[tIdx]);
+    } else {
+      assert.ok(!assigned.has(team[i].id));
+    }
+  }
 });
