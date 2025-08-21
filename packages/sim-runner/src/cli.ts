@@ -220,6 +220,112 @@ async function trainHybridCEM(cfg: CemCfg) {
   return best;
 }
 
+/* ---------------- CMA-ES for Hybrid ---------------- */
+type CmaCfg = {
+  pop: number;
+  gens: number;
+  seedsPer: number;
+  episodesPerSeed: number;
+  seed: number;
+  oppNames: string[];
+  artifactsDir: string;
+  pfsp?: boolean;
+  pfspCount?: number;
+  logBest?: boolean;
+};
+
+async function trainHybridCMA(cfg: CmaCfg) {
+  const {
+    pop, gens, seedsPer, episodesPerSeed, seed,
+    oppNames, artifactsDir, pfsp = false, pfspCount = 3, logBest = false,
+  } = cfg;
+
+  const DIM = ORDER.length;
+  const rng = mulberry32(seed >>> 0);
+  const oppsAll = await resolveOppPool(oppNames);
+  if (oppsAll.length === 0) throw new Error('No opponents resolved for training.');
+
+  let mean = baselineVec();
+  let sigma = defaultSigmas();
+
+  const mu = Math.max(1, Math.floor(pop / 2));
+  const weights = Array.from({ length: mu }, (_, i) => Math.log(mu + 0.5) - Math.log(i + 1));
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  const wNorm = weights.map(w => w / wSum);
+
+  fs.mkdirSync(path.resolve(artifactsDir), { recursive: true });
+  const logPath = path.resolve(artifactsDir, 'hybrid_cma_log.jsonl');
+  const outPath = path.resolve(artifactsDir, 'best_hybrid.json');
+
+  console.log(`Training CMA-ES (subject=hybrid): dim=${DIM} pop=${pop} gens=${gens} seedsPer=${seedsPer} oppPool=${oppNames.join(',')}${pfsp ? ' [PFSP]' : ''}`);
+
+  let best = { fit: -Infinity, wr: 0, avgDiff: 0, tw: twFromVec(mean) };
+
+  for (let g = 0; g < gens; g++) {
+    const popVecs: number[][] = [];
+    for (let i = 0; i < pop; i++) {
+      const v: number[] = [];
+      for (let d = 0; d < DIM; d++) {
+        const z = gaussian(rng);
+        v.push(mean[d] + z * sigma[d]);
+      }
+      popVecs.push(v);
+    }
+
+    const evals = [];
+    for (let i = 0; i < pop; i++) {
+      const r = await evalHybridVector(popVecs[i], oppsAll, seedsPer, episodesPerSeed, seed + g * 10007 + i * 37, pfsp, pfspCount);
+      evals.push({ idx: i, ...r });
+    }
+    evals.sort((a, b) => b.fit - a.fit);
+
+    const eliteIdx = evals.slice(0, mu).map(e => e.idx);
+    const head = evals[0];
+    if (head.fit > best.fit) best = head;
+
+    const newMean = new Array(DIM).fill(0);
+    for (let d = 0; d < DIM; d++) {
+      for (let j = 0; j < mu; j++) {
+        newMean[d] += wNorm[j] * popVecs[eliteIdx[j]][d];
+      }
+    }
+    mean = newMean;
+
+    const newSigma = new Array(DIM).fill(0);
+    for (let d = 0; d < DIM; d++) {
+      let vSum = 0;
+      for (let j = 0; j < mu; j++) {
+        const idx = eliteIdx[j];
+        const dv = popVecs[idx][d] - mean[d];
+        vSum += wNorm[j] * dv * dv;
+      }
+      newSigma[d] = Math.sqrt(vSum) || sigma[d];
+    }
+    sigma = newSigma;
+
+    console.log(`CMA-ES gen ${g}: bestFit=${head.fit.toFixed(2)} wr=${(head.wr*100).toFixed(1)}%`);
+    fs.appendFileSync(logPath, JSON.stringify({ gen: g, bestFit: head.fit, bestWR: head.wr, bestAvgDiff: head.avgDiff }) + "\n");
+    if (logBest) {
+      const bestTs = path.resolve(artifactsDir, `hybrid-params.gen${g}.ts`);
+      const ts = `export const TUNE = ${JSON.stringify(head.tw.TUNE, null, 2)} as const;\nexport const WEIGHTS = ${JSON.stringify(head.tw.WEIGHTS, null, 2)} as const;\nexport default { TUNE, WEIGHTS };\n`;
+      fs.writeFileSync(bestTs, ts);
+    }
+  }
+
+  fs.writeFileSync(outPath, JSON.stringify({ TUNE: best.tw.TUNE, WEIGHTS: best.tw.WEIGHTS }, null, 2));
+  console.log(`Wrote best hybrid params -> ${outPath}`);
+
+  const outTs = path.resolve(artifactsDir, 'hybrid-params.best.ts');
+  const ts = `/** Auto-generated from CMA-ES best_hybrid.json — do not edit by hand */\n` +
+             `export const TUNE = ${JSON.stringify(best.tw.TUNE, null, 2)} as const;\n\n` +
+             `export const WEIGHTS = ${JSON.stringify(best.tw.WEIGHTS, null, 2)} as const;\n` +
+             `export default { TUNE, WEIGHTS };\n`;
+  fs.writeFileSync(outTs, ts);
+  console.log(`Wrote -> ${outTs}`);
+
+  return best;
+}
+
 /* ---------------- Tag helpers for SIM replays ---------------- */
 function countTags(actions: any[]): Record<string, number> {
   const c: Record<string, number> = {};
@@ -303,32 +409,48 @@ async function main() {
     const seedsPer = Number(getFlag(rest, 'seeds-per', 7));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
     const jobs = Number(getFlag(rest, 'jobs', 1)); // reserved
-    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random'));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,stunner,camper,hof'));
     const subject = String(getFlag(rest, 'subject', '')).trim().toLowerCase();
     const pfsp = getBool(rest, 'pfsp', false);
     const pfspCount = Number(getFlag(rest, 'pfsp-count', 3));
     const logBest = getBool(rest, 'log-best', false);
 
     if (subject === 'hybrid') {
-      if (algo !== 'cem') {
-        console.log(`Hybrid currently supports --algo cem only.`);
+      const oppNames = oppPoolArg.split(',').map(s=>s.trim()).filter(Boolean);
+      const artDir = path.resolve('packages/sim-runner/artifacts');
+
+      if (algo === 'cma') {
+        await trainHybridCMA({
+          pop, gens,
+          seedsPer, episodesPerSeed,
+          seed,
+          oppNames,
+          artifactsDir: artDir,
+          pfsp, pfspCount,
+          logBest,
+        });
         return;
       }
-      const oppNames = oppPoolArg.split(',').map(s=>s.trim()).filter(Boolean);
-      await trainHybridCEM({
-        pop, gens, elitePct: 0.2,
-        seedsPer, episodesPerSeed,
-        seed, jobs,
-        oppNames,
-        artifactsDir: 'artifacts',
-        pfsp, pfspCount,
-        logBest
-      });
+
+      if (algo === 'cem') {
+        await trainHybridCEM({
+          pop, gens, elitePct: 0.2,
+          seedsPer, episodesPerSeed,
+          seed, jobs,
+          oppNames,
+          artifactsDir: artDir,
+          pfsp, pfspCount,
+          logBest,
+        });
+        return;
+      }
+
+      console.log(`Hybrid currently supports --algo cem or cma.`);
       return;
     }
 
     console.log(`Unknown or empty --subject. Use: --subject hybrid`);
-    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cem --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random --pfsp`);
+    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random,hof`);
     return;
   }
 
@@ -405,7 +527,7 @@ async function main() {
 
   console.log(`Usage:
   # Train Hybrid (CEM)
-  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random [--pfsp]
+  tsx src/cli.ts train --subject hybrid --algo cma --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,hof [--pfsp]
 
   # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]
