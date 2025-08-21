@@ -11,6 +11,11 @@ test('parseAction parses WAIT as explicit action', () => {
   assert.deepEqual(parseAction('WAIT'), { type: 'WAIT' });
 });
 
+test('parseAction returns undefined for malformed inputs', () => {
+  assert.equal(parseAction('MOVE 1000'), undefined);
+  assert.equal(parseAction('BUST notanid'), undefined);
+});
+
 test('loop ends when no ghosts remain and none are carried', () => {
   let state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const b = state.busters[0];

@@ -11,17 +11,27 @@ export function parseAction(line: string): Action | undefined {
   const cmd = parts[0]?.toUpperCase();
   switch (cmd) {
     case 'MOVE':
-      return { type: 'MOVE', x: Number(parts[1]), y: Number(parts[2]) };
+      const x = Number(parts[1]);
+      const y = Number(parts[2]);
+      return Number.isFinite(x) && Number.isFinite(y)
+        ? { type: 'MOVE', x, y }
+        : undefined;
     case 'BUST':
-      return { type: 'BUST', ghostId: Number(parts[1]) };
+      const ghostId = Number(parts[1]);
+      return Number.isFinite(ghostId) ? { type: 'BUST', ghostId } : undefined;
     case 'RELEASE':
       return { type: 'RELEASE' };
     case 'STUN':
-      return { type: 'STUN', busterId: Number(parts[1]) };
+      const busterId = Number(parts[1]);
+      return Number.isFinite(busterId) ? { type: 'STUN', busterId } : undefined;
     case 'RADAR':
       return { type: 'RADAR' };
     case 'EJECT':
-      return { type: 'EJECT', x: Number(parts[1]), y: Number(parts[2]) };
+      const ex = Number(parts[1]);
+      const ey = Number(parts[2]);
+      return Number.isFinite(ex) && Number.isFinite(ey)
+        ? { type: 'EJECT', x: ex, y: ey }
+        : undefined;
     case 'WAIT':
       return { type: 'WAIT' };
     default:
