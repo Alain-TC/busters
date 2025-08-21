@@ -42,8 +42,8 @@ export function initGame({
       x = Math.floor(rng.float() * MAP_W);
       y = Math.floor(rng.float() * MAP_H);
     } while (
-      dist(x, y, TEAM0_BASE.x, TEAM0_BASE.y) <= RULES.BASE_RADIUS ||
-      dist(x, y, TEAM1_BASE.x, TEAM1_BASE.y) <= RULES.BASE_RADIUS
+      dist(x, y, TEAM0_BASE.x, TEAM0_BASE.y) < RULES.BASE_RADIUS ||
+      dist(x, y, TEAM1_BASE.x, TEAM1_BASE.y) < RULES.BASE_RADIUS
     );
     return { x, y };
   };
@@ -88,8 +88,8 @@ export function initGame({
 }
 
 function withinBase(b: {x:number;y:number}): { team: TeamId | null } {
-  const base0 = dist(b.x, b.y, TEAM0_BASE.x, TEAM0_BASE.y) <= RULES.BASE_RADIUS ? 0 : null;
-  const base1 = dist(b.x, b.y, TEAM1_BASE.x, TEAM1_BASE.y) <= RULES.BASE_RADIUS ? 1 : null;
+  const base0 = dist(b.x, b.y, TEAM0_BASE.x, TEAM0_BASE.y) < RULES.BASE_RADIUS ? 0 : null;
+  const base1 = dist(b.x, b.y, TEAM1_BASE.x, TEAM1_BASE.y) < RULES.BASE_RADIUS ? 1 : null;
   return { team: (base0 ?? base1) as TeamId | null };
 }
 

@@ -23,8 +23,8 @@ test('initGame sets up teams and ghosts within bounds', () => {
     assert.ok(g.y >= 0 && g.y < MAP_H);
     const d0 = dist(g.x, g.y, TEAM0_BASE.x, TEAM0_BASE.y);
     const d1 = dist(g.x, g.y, TEAM1_BASE.x, TEAM1_BASE.y);
-    assert.ok(d0 > RULES.BASE_RADIUS);
-    assert.ok(d1 > RULES.BASE_RADIUS);
+    assert.ok(d0 >= RULES.BASE_RADIUS);
+    assert.ok(d1 >= RULES.BASE_RADIUS);
   }
 });
 
@@ -33,8 +33,8 @@ test('lone ghost spawns outside base radius', () => {
   const g = state.ghosts[0];
   const d0 = dist(g.x, g.y, TEAM0_BASE.x, TEAM0_BASE.y);
   const d1 = dist(g.x, g.y, TEAM1_BASE.x, TEAM1_BASE.y);
-  assert.ok(d0 > RULES.BASE_RADIUS);
-  assert.ok(d1 > RULES.BASE_RADIUS);
+  assert.ok(d0 >= RULES.BASE_RADIUS);
+  assert.ok(d1 >= RULES.BASE_RADIUS);
 });
 
 test('ghost stamina follows official distribution', () => {
@@ -148,6 +148,27 @@ test('release outside base decrements score', () => {
   assert.equal(dropped.y, b.y);
 });
 
+test('release at base radius does not score', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const b = state.busters[0];
+  const boundaryX = TEAM0_BASE.x + RULES.BASE_RADIUS;
+  // place exactly on base boundary
+  b.x = boundaryX; b.y = TEAM0_BASE.y;
+  const ghost = state.ghosts[0];
+  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+
+  const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, capture);
+
+  const release: ActionsByTeam = { 0: [{ type: 'RELEASE' }], 1: [] } as any;
+  const end = step(mid, release);
+  assert.equal(end.scores[0], -1);
+  assert.equal(end.ghosts.length, 1);
+  const dropped = end.ghosts[0];
+  assert.equal(dropped.x, boundaryX);
+  assert.equal(dropped.y, TEAM0_BASE.y);
+});
+
 test('stun drops carried ghost and sets cooldown', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
   const attacker = state.busters.find(b => b.teamId === 0)!;
@@ -176,6 +197,34 @@ test('stun drops carried ghost and sets cooldown', () => {
   assert.equal(next.ghosts[0].id, ghost.id);
   assert.equal(next.ghosts[0].x, victim.x);
   assert.equal(next.ghosts[0].y, victim.y);
+});
+
+test('stun drop at base radius does not score', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
+  const victim = state.busters.find(b => b.teamId === 0)!;
+  const attacker = state.busters.find(b => b.teamId === 1)!;
+
+  const boundaryX = TEAM0_BASE.x + RULES.BASE_RADIUS;
+  // place victim on base boundary and attacker within stun range
+  victim.x = boundaryX; victim.y = TEAM0_BASE.y;
+  attacker.x = boundaryX + RULES.STUN_RANGE - 1; attacker.y = victim.y;
+
+  const ghost = state.ghosts[0];
+  ghost.x = victim.x + RULES.BUST_MIN; ghost.y = victim.y; ghost.endurance = 1;
+
+  // victim captures ghost
+  const capture: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
+  const mid = step(state, capture);
+
+  // attacker stuns victim at boundary
+  const stun: ActionsByTeam = { 0: [], 1: [{ type: 'STUN', busterId: victim.id }] } as any;
+  const end = step(mid, stun);
+
+  assert.equal(end.scores[0], 0);
+  assert.equal(end.ghosts.length, 1);
+  const dropped = end.ghosts[0];
+  assert.equal(dropped.x, boundaryX);
+  assert.equal(dropped.y, TEAM0_BASE.y);
 });
 
 test('re-stunning resets stun timer to full duration', () => {
