@@ -1,6 +1,7 @@
 /** EVOL2 — minimal shared state for the hybrid bot.
  *  - Coarse visit grid for frontier-style exploration under fog
  *  - Enemy last-seen tracking (pos, tick, carrying, stunCd)
+ *  - Ghost probability heatmap (coarse grid, decays each tick)
  *  Keep it tiny and robust; we’ll extend later (ghost probs, priors, etc.).
  */
 
@@ -30,6 +31,10 @@ export class HybridState {
   readonly cellW: number;
   readonly cellH: number;
 
+  // Ghost probability heatmap per cell
+  readonly ghostProb: number[];
+  ghostDecay: number;
+
   // Enemy last-seen
   enemies = new Map<number, EnemySeen>();
   enemyMaxAge: number;
@@ -38,7 +43,9 @@ export class HybridState {
     bounds?: { w?: number; h?: number },
     cols = 8,
     rows = 5,
-    enemyMaxAge = DEFAULT_ENEMY_MAX_AGE
+    enemyMaxAge = DEFAULT_ENEMY_MAX_AGE,
+    spawnPoints: Pt[] = [],
+    ghostDecay = 0.95
   ) {
     const W = bounds?.w ?? MAP_W;
     const H = bounds?.h ?? MAP_H;
@@ -46,8 +53,12 @@ export class HybridState {
     this.rows = rows;
     this.cellW = W / cols;
     this.cellH = H / rows;
-    this.visits = Array(cols * rows).fill(0);
+    const size = cols * rows;
+    this.visits = Array(size).fill(0);
     this.enemyMaxAge = enemyMaxAge;
+    this.ghostProb = Array(size).fill(0);
+    this.ghostDecay = ghostDecay;
+    this.seedGhosts(spawnPoints);
   }
 
   private idxFromPoint(p: Pt): number {
@@ -58,6 +69,52 @@ export class HybridState {
 
   touchVisit(p: Pt) {
     this.visits[this.idxFromPoint(p)]++;
+  }
+
+  /** Seed ghost probabilities around known spawn points */
+  private seedGhosts(spawns: Pt[]) {
+    for (const s of spawns) {
+      const i = this.idxFromPoint(s);
+      this.ghostProb[i] = 1;
+    }
+  }
+
+  /** Apply exponential decay to all ghost probabilities */
+  decayGhosts() {
+    for (let i = 0; i < this.ghostProb.length; i++) {
+      this.ghostProb[i] *= this.ghostDecay;
+    }
+  }
+
+  /** Update probabilities with observed or captured ghosts */
+  updateGhosts(visible: Pt[] = [], captured: Pt[] = []) {
+    for (const g of visible) {
+      const i = this.idxFromPoint(g);
+      this.ghostProb[i] = 1;
+    }
+    for (const g of captured) {
+      const i = this.idxFromPoint(g);
+      this.ghostProb[i] = 0;
+    }
+  }
+
+  /** Center points of top-N cells by probability (descending) */
+  topGhostCells(n = 1): Array<{ center: Pt; prob: number }> {
+    const cells = this.ghostProb
+      .map((prob, idx) => ({ prob, idx }))
+      .filter(c => c.prob > 0)
+      .sort((a, b) => b.prob - a.prob)
+      .slice(0, n);
+    return cells.map(({ prob, idx }) => {
+      const cy = Math.floor(idx / this.cols);
+      const cx = idx % this.cols;
+      return { center: centerOfCell(cx, cy, this.cellW, this.cellH), prob };
+    });
+  }
+
+  /** Probability lookup for a point */
+  ghostProbAt(p: Pt): number {
+    return this.ghostProb[this.idxFromPoint(p)];
   }
 
   /** Return center of least-visited cell (simple frontier heuristic) */
@@ -100,7 +157,7 @@ export function getState(ctx: any, obs: any): HybridState {
   // Reset on new match or at tick 0/1 to be safe
   const key = "team"; // one state is fine for our side in this runner
   if (!G[key] || obs?.tick <= 1) {
-    G[key] = new HybridState(ctx?.bounds);
+    G[key] = new HybridState(ctx?.bounds, 8, 5, DEFAULT_ENEMY_MAX_AGE, ctx?.ghostSpawns);
   }
   return G[key] as HybridState;
 }

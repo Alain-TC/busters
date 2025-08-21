@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, __mem, __pMem } from './hybrid-bot';
+import { HybridState } from './lib/state';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
@@ -29,4 +30,25 @@ test('patrol indices reset on new match', () => {
   // old entries cleared and waypoint reset to zero
   assert.equal(__pMem.get(1)?.wp, 0);
   assert.ok(!__pMem.has(99));
+});
+
+test('ghost probability map decays and updates', () => {
+  const spawns = [{ x: 100, y: 100 }];
+  const st = new HybridState({ w: 400, h: 400 }, 2, 2, undefined, spawns, 0.5);
+
+  let top = st.topGhostCells(1)[0];
+  assert.ok(top.prob > 0);
+  const initial = top.prob;
+
+  st.decayGhosts();
+  top = st.topGhostCells(1)[0];
+  assert.ok(top.prob < initial);
+
+  st.updateGhosts([{ x: 100, y: 100 }]);
+  top = st.topGhostCells(1)[0];
+  assert.equal(top.prob, 1);
+
+  st.updateGhosts([], [{ x: 100, y: 100 }]);
+  const probAfterCapture = st.ghostProbAt({ x: 100, y: 100 });
+  assert.equal(probAfterCapture, 0);
 });
