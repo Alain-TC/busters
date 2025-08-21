@@ -62,3 +62,19 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
   const after = (f as any).heat[idx];
   assert.ok(after < before);
 });
+
+test('assigns support task when ally engages enemy near ghost', () => {
+  // reset state for a new match
+  act({}, { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] });
+
+  const ctx: any = { tick: 10, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 }, bustersPerPlayer: 2 };
+  const obs: any = {
+    tick: 10,
+    self: { id: 2, x: 4050, y: 4050, state: 0, stunCd: 5 },
+    friends: [{ id: 3, x: 2000, y: 2000, state: 0 }],
+    enemies: [{ id: 5, x: 4100, y: 4100, state: 0 }],
+    ghostsVisible: [{ id: 7, x: 4000, y: 4000 }],
+  };
+  const res: any = act(ctx, obs);
+  assert.equal(res.__dbg.tag, 'SUPPORT');
+});

@@ -28,6 +28,8 @@ export type Weights = {
   BLOCK_BASE: number;           // base utility for blocker tasks
   EXPLORE_BASE: number;         // base utility for explore tasks
   DIST_PEN: number;             // generic distance penalty
+  SUPPORT_BASE: number;         // base utility for support-stun tasks
+  SUPPORT_CONTEST_BONUS: number;// bonus if supporting a contested ghost
 };
 
 // -----------------------------------------------------------------------------
@@ -56,6 +58,8 @@ export const WEIGHTS: Weights = {
   BLOCK_BASE: 6,
   EXPLORE_BASE: 4,
   DIST_PEN: 0.003,
+  SUPPORT_BASE: 11,
+  SUPPORT_CONTEST_BONUS: 3,
 };
 
 // Default export (some loaders import default)

@@ -100,7 +100,7 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 }
 
 /** ---- Auction / Task machinery ---- */
-type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
+type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
 /** Shared per-tick plan cache (computed once, read by all) */
@@ -118,6 +118,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   const tasks: Task[] = [];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
+  const team = uniqTeam(meObs.self, meObs.friends);
 
   // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
@@ -160,13 +161,30 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
   }
 
+  // SUPPORT: assist allies or contested ghosts with stuns
+  for (const e of enemies) {
+    const allyEngaged = team.some(f => dist(f.x, f.y, e.x, e.y) <= TUNE.STUN_RANGE);
+    const contestedGhost = ghosts.find(g =>
+      dist(g.x, g.y, e.x, e.y) <= 2200 &&
+      team.some(f => dist(f.x, f.y, g.x, g.y) <= BUST_MAX)
+    );
+    if (allyEngaged || contestedGhost) {
+      let baseScore = WEIGHTS.SUPPORT_BASE;
+      const payload: any = { enemyId: e.id };
+      if (contestedGhost) {
+        baseScore += WEIGHTS.SUPPORT_CONTEST_BONUS;
+        payload.ghost = { x: contestedGhost.x, y: contestedGhost.y, id: contestedGhost.id };
+      }
+      tasks.push({ type: "SUPPORT", target: { x: e.x, y: e.y }, payload, baseScore });
+    }
+  }
+
   // BLOCK enemy base (if no carriers seen)
   if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
     tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
   // EXPLORE: coarse frontier via shared state (fallback to patrols)
-  const team = uniqTeam(meObs.self, meObs.friends);
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
@@ -239,6 +257,26 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
   if (t.type === "DEFEND") {
     const near = enemies.filter(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS).length;
     s += near * 1.5;
+  }
+  if (t.type === "SUPPORT") {
+    const enemy = enemies.find(e => e.id === t.payload?.enemyId);
+    if (enemy) {
+      const P = { x: enemy.x, y: enemy.y };
+      const d = dist(b.x, b.y, P.x, P.y);
+      s = t.baseScore - d * WEIGHTS.DIST_PEN;
+      s += duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE });
+      if (t.payload?.ghost) {
+        s += contestedBustDelta({
+          me: b,
+          ghost: t.payload.ghost,
+          enemies,
+          bustMin: BUST_MIN,
+          bustMax: BUST_MAX,
+          stunRange: TUNE.STUN_RANGE,
+          canStunMe,
+        });
+      }
+    }
   }
   return s;
 }
@@ -389,6 +427,16 @@ export function act(ctx: Ctx, obs: Obs) {
       }
       const tgt = spacedTarget(me, myTask.target, friends);
       return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "midpoint");
+    }
+
+    if (myTask.type === "SUPPORT") {
+      const enemy = enemiesAll.find(e => e.id === myTask.payload?.enemyId);
+      if (enemy) {
+        const tgt = spacedTarget(me, { x: enemy.x, y: enemy.y }, friends);
+        return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "SUPPORT", "assist");
+      }
+      const tgt = spacedTarget(me, myTask.target, friends);
+      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "SUPPORT", "last_known");
     }
 
     if (myTask.type === "DEFEND") {
