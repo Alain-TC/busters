@@ -5,7 +5,28 @@ import path from 'path';
 import { Worker } from 'worker_threads';
 import { runEpisodes } from './runEpisodes';
 import { loadBotModule } from './loadBots';
-import { loadElo, saveElo, pickOpponentPFSP, recordMatch, PFSPCandidate } from './elo';
+import { loadEloTable, saveEloTable, updateElo } from './elo';
+
+// ----- Elo helpers -----
+type EloTable = Record<string, number>;
+const LEARNER_ID = 'learner';
+
+function loadElo(dir: string): EloTable {
+  return loadEloTable(path.resolve(dir, 'elo.json'));
+}
+
+function saveElo(dir: string, tbl: EloTable) {
+  saveEloTable(tbl, path.resolve(dir, 'elo.json'));
+}
+
+function recordMatch(tbl: EloTable, oppId: string, win: boolean) {
+  updateElo(tbl, LEARNER_ID, oppId, win ? 1 : 0);
+}
+
+// PFSP candidate description (module or HOF genome)
+export type PFSPCandidate =
+  | { type: 'module'; spec: string; id?: string }
+  | { type: 'genome'; genome: Genome; tag?: string; id?: string };
 
 // HOTFIX: PFSP tie-break -> round-robin déterministe par (gi, seed)
 function pickOpponentRoundRobin(cands: PFSPCandidate[], gi: number, seed: number) {
