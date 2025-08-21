@@ -241,6 +241,10 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
         if (baseTeam !== null) {
           // score + ghost removed from game
           next.scores[baseTeam] += 1;
+          // releasing in opponent base penalizes the releaser
+          if (baseTeam !== b.teamId) {
+            next.scores[b.teamId] -= 1;
+          }
           // (ghost was already removed from map when captured)
           b.state = 0; b.value = 0;
         } else {
