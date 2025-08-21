@@ -21,6 +21,8 @@ type EnemySeen = {
   lastTick: number;
   carrying: boolean;
   stunCd: number | undefined;
+  vx: number;
+  vy: number;
 };
 
 export class HybridState {
@@ -195,18 +197,48 @@ export class HybridState {
   }
 
   trackEnemies(enemies?: any[], tick?: number) {
-    if (!enemies) return;
-    for (const e of enemies) {
-      if (e?.x === undefined || e?.y === undefined) continue;
-      this.enemies.set(e.id, {
-        id: e.id,
-        last: { x: e.x, y: e.y },
-        lastTick: tick ?? 0,
-        carrying: e.carrying !== undefined,
-        stunCd: e.stunCd
-      });
+    const seen = new Set<number>();
+    if (enemies) {
+      for (const e of enemies) {
+        if (e?.x === undefined || e?.y === undefined) continue;
+        const prev = this.enemies.get(e.id);
+        let vx = 0, vy = 0;
+        if (prev && tick !== undefined) {
+          const dt = tick - prev.lastTick;
+          if (dt > 0) {
+            vx = (e.x - prev.last.x) / dt;
+            vy = (e.y - prev.last.y) / dt;
+          } else {
+            vx = prev.vx;
+            vy = prev.vy;
+          }
+        }
+        this.enemies.set(e.id, {
+          id: e.id,
+          last: { x: e.x, y: e.y },
+          lastTick: tick ?? prev?.lastTick ?? 0,
+          carrying: e.carrying !== undefined,
+          stunCd: e.stunCd,
+          vx,
+          vy,
+        });
+        seen.add(e.id);
+      }
     }
-    if (tick !== undefined) this.pruneEnemies(tick);
+    if (tick !== undefined) {
+      for (const [id, e] of this.enemies) {
+        if (seen.has(id)) continue;
+        const dt = tick - e.lastTick;
+        if (dt > 0) {
+          e.last = {
+            x: clamp(e.last.x + e.vx * dt, 0, MAP_W),
+            y: clamp(e.last.y + e.vy * dt, 0, MAP_H),
+          };
+          e.lastTick = tick;
+        }
+      }
+      this.pruneEnemies(tick);
+    }
   }
 }
 

@@ -62,3 +62,25 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
   const after = (f as any).heat[idx];
   assert.ok(after < before);
 });
+
+test('trackEnemies computes velocity and propagates positions', () => {
+  const st = new HybridState();
+  st.trackEnemies([{ id: 1, x: 1000, y: 1000 }], 1);
+  st.trackEnemies([{ id: 1, x: 1200, y: 1000 }], 2);
+  st.trackEnemies(undefined, 4); // propagate two ticks
+  const e = st.enemies.get(1)!;
+  assert.ok(Math.abs(e.vx - 200) < 1e-6);
+  assert.equal(Math.round(e.last.x), 1600);
+  assert.equal(Math.round(e.last.y), 1000);
+});
+
+test('bumpGhost biases heat along velocity vector', () => {
+  const f = new Fog();
+  f.bumpGhost(8000, 4500, 400, 0); // eastward motion
+  const idxC = (f as any).idxOf(8000, 4500);
+  const idxE = (f as any).idxOf(8400, 4500);
+  const idxW = (f as any).idxOf(7600, 4500);
+  const heat = (f as any).heat;
+  assert.ok(heat[idxE] > heat[idxW]);
+  assert.ok(heat[idxC] > 0);
+});

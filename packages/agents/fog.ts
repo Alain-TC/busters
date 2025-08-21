@@ -42,7 +42,7 @@ export class Fog {
     this.heat.fill(0);
   }
 
-  beginTick(t: number) {
+  beginTick(t: number, vx = 0, vy = 0) {
     if (t === this.tick) return;
     this.tick = t;
 
@@ -52,7 +52,7 @@ export class Fog {
       this.heat[i] *= 0.97; // gentle decay
       if (this.heat[i] < 0.02) this.heat[i] = 0;
     }
-    this.diffuse();
+    this.diffuse(vx, vy);
     this.normalize();
   }
 
@@ -91,12 +91,18 @@ export class Fog {
     this.normalize();
   }
 
-  /** Positive evidence: increase belief near a ghost sighting */
-  bumpGhost(x: number, y: number) {
+  /** Positive evidence: increase belief near a ghost sighting.
+   *  Optional velocity biases heat in direction of motion.
+   */
+  bumpGhost(x: number, y: number, vx = 0, vy = 0) {
     const gx0 = clamp(Math.floor((x - 800) / CELL), 0, GX - 1);
     const gx1 = clamp(Math.floor((x + 800) / CELL), 0, GX - 1);
     const gy0 = clamp(Math.floor((y - 800) / CELL), 0, GY - 1);
     const gy1 = clamp(Math.floor((y + 800) / CELL), 0, GY - 1);
+
+    const speed = Math.hypot(vx, vy);
+    const dirX = speed ? vx / speed : 0;
+    const dirY = speed ? vy / speed : 0;
 
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
@@ -104,14 +110,22 @@ export class Fog {
         const cy = gy * CELL + CELL / 2;
         const d = dist(cx, cy, x, y);
         const w = Math.max(0, 1 - d / 900); // cone within ~900
+        let bias = 1;
+        if (speed > 0) {
+          const dx = cx - x;
+          const dy = cy - y;
+          const proj = (dx * dirX + dy * dirY) / (Math.hypot(dx, dy) || 1);
+          bias += 0.5 * proj; // [-0.5, +0.5] bias
+          if (bias < 0) bias = 0;
+        }
         const i = gy * GX + gx;
-        this.heat[i] += 0.8 * w;
+        this.heat[i] += 0.8 * w * bias;
       }
     }
     this.normalize();
   }
 
-  private diffuse() {
+  private diffuse(vx = 0, vy = 0) {
     const next = new Float32Array(this.heat.length);
     for (let gy = 0; gy < GY; gy++) {
       for (let gx = 0; gx < GX; gx++) {
@@ -127,10 +141,16 @@ export class Fog {
         ];
         for (const [dx, dy] of nbs) {
           const nx = gx + dx, ny = gy + dy;
+          let w = share;
+          if (vx || vy) {
+            const dot = dx * vx + dy * vy;
+            if (dot > 0) w *= 1.1;
+            if (dot < 0) w *= 0.9;
+          }
           if (nx >= 0 && nx < GX && ny >= 0 && ny < GY) {
-            next[ny * GX + nx] += share;
+            next[ny * GX + nx] += w;
           } else {
-            next[i] += share;
+            next[i] += w;
           }
         }
       }
