@@ -4,6 +4,7 @@ import path from 'path';
 import { loadBotModule } from './loadBots';
 import { runEpisodes } from './runEpisodes';
 import { runRoundRobin } from './tournament';
+import { trainCEM as trainGA } from './ga';
 
 // Hybrid subject (EVOL2)
 import {
@@ -454,6 +455,29 @@ async function main() {
     return;
   }
 
+  if (mode === 'ga') {
+    const gens = Number(getFlag(rest, 'gens', 20));
+    const pop = Number(getFlag(rest, 'pop', 24));
+    const seed = Number(getFlag(rest, 'seed', 42));
+    const seedsPer = Number(getFlag(rest, 'seeds-per', 5));
+    const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
+    const hofSize = Number(getFlag(rest, 'hof-size', 3));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', '@busters/agents/greedy,@busters/agents/random'));
+    const jobs = Number(getFlag(rest, 'jobs', 1));
+    const hofRefresh = Number(getFlag(rest, 'hof-refresh', 0));
+    const rotateEvery = Number(getFlag(rest, 'rotate-opps', 0));
+    const telemetry = String(getFlag(rest, 'telemetry', path.join('packages/sim-runner/artifacts', 'tag_telemetry.jsonl')));
+    const oppPool = oppPoolArg.split(',').map((s) => ({ id: s.trim() })).filter(o => o.id);
+    await trainGA({
+      gens, pop, elitePct: 0.2, seedsPer, episodesPerSeed, oppPool, hofSize, seed,
+      artifactsDir: 'packages/sim-runner/artifacts', jobs,
+      hofRefreshInterval: hofRefresh || undefined,
+      oppRotateInterval: rotateEvery || undefined,
+      telemetryPath: telemetry,
+    });
+    return;
+  }
+
   if (mode === 'compile') {
     const inPath = String(getFlag(rest, 'in', 'artifacts/simrunner_best_genome.json'));
     const outPath = String(getFlag(rest, 'out', '../agents/evolved-bot.js'));
@@ -537,6 +561,10 @@ async function main() {
     --seed 123 --seeds 5 --episodes 3 \\
     [--replay-dir ../viewer/public/replays/tourney] \\
     [--out artifacts/tournament_standings.json]
+
+  # GA trainer with auto HOF refresh & opponent rotation
+  tsx src/cli.ts ga --gens 20 --pop 24 --opp-pool @busters/agents/greedy,@busters/agents/random \\
+    [--hof-refresh 5] [--rotate-opps 5] [--telemetry artifacts/tag_telemetry.jsonl]
 `);
 }
 main();

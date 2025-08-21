@@ -120,6 +120,12 @@ type CEMOpts = {
   seed: number;
   artifactsDir: string;
   jobs?: number;
+  /** refresh HOF from tournament standings every N generations */
+  hofRefreshInterval?: number;
+  /** rotate opponent pool every N generations */
+  oppRotateInterval?: number;
+  /** path for per-tag telemetry log */
+  telemetryPath?: string;
 };
 
 // Deterministic env params
@@ -131,14 +137,20 @@ function envFromSeed(s: number) {
 }
 
 // ===== PFSP logging =====
+type PFSPStats = Record<string, { picks: number; wins: number; losses: number }>;
+
 function pfspLogPath(opts: CEMOpts) {
   if (process.env.PFSP_LOG_PATH) return path.resolve(process.env.PFSP_LOG_PATH);
   return path.resolve(process.cwd(), opts.artifactsDir, 'pfsp_log.jsonl');
 }
-function logPFSPPick(opts: CEMOpts, entry: any) {
+function logPFSPPick(opts: CEMOpts, stats: PFSPStats, entry: any) {
+  const s = stats[entry.oppId] || (stats[entry.oppId] = { picks: 0, wins: 0, losses: 0 });
+  s.picks++;
   try { fs.appendFileSync(pfspLogPath(opts), JSON.stringify({ type: 'pick', ...entry }) + '\n'); } catch {}
 }
-function logPFSPResult(opts: CEMOpts, entry: any) {
+function logPFSPResult(opts: CEMOpts, stats: PFSPStats, entry: any) {
+  const s = stats[entry.oppId] || (stats[entry.oppId] = { picks: 0, wins: 0, losses: 0 });
+  if (entry.diff > 0) s.wins++; else if (entry.diff < 0) s.losses++;
   try { fs.appendFileSync(pfspLogPath(opts), JSON.stringify({ type: 'result', ...entry }) + '\n'); } catch {}
 }
 
@@ -166,6 +178,59 @@ function shuffleDet<T>(arr: T[], seed: number): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+// Refresh HOF genomes from latest tournament standings file
+function refreshHallOfFame(artDir: string) {
+  const tourPath = path.resolve(process.cwd(), artDir, 'tournament_standings.json');
+  if (!fs.existsSync(tourPath)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(tourPath, 'utf-8'));
+    const ranked: string[] = Array.isArray(data?.ranked) ? data.ranked : [];
+    const genomes: Genome[] = [];
+    for (const id of ranked) {
+      if (typeof id === 'string' && id.startsWith('hof:')) {
+        const parts = id.slice(4).split(',').map((n: string) => Number(n));
+        if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
+          genomes.push({ radarTurn: parts[0], stunRange: parts[1], releaseDist: parts[2] });
+        }
+      }
+    }
+    if (genomes.length) {
+      HOF.length = 0;
+      HOF.push(...genomes);
+      console.log(`Refreshed HOF with ${genomes.length} entries from tournament.`);
+    }
+  } catch (e) {
+    console.warn('Failed to refresh HOF:', e);
+  }
+}
+
+function rotateOpponentPool(opts: CEMOpts, elo: Record<string, number>, stats: PFSPStats, baseSize: number) {
+  const scored = Object.entries(stats).map(([id, s]) => {
+    const wr = s.picks > 0 ? s.wins / s.picks : 0;
+    const score = (elo[id] ?? 1000) * (1 - wr); // prioritize high Elo & low win-rate
+    return { id, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const rotated = scored
+    .map(s => s.id)
+    .filter(id => id.startsWith('@busters/agents/'))
+    .slice(0, baseSize)
+    .map(id => ({ id }));
+  if (rotated.length) {
+    opts.oppPool = rotated;
+    console.log(`Rotated opponent pool -> [${rotated.map(r => r.id).join(',')}]`);
+  }
+}
+
+function logTelemetry(opts: CEMOpts, stats: PFSPStats, elo: Record<string, number>, gen: number) {
+  const file = path.resolve(process.cwd(), opts.telemetryPath || path.join(opts.artifactsDir, 'tag_telemetry.jsonl'));
+  for (const [tag, s] of Object.entries(stats)) {
+    const wr = s.picks > 0 ? s.wins / s.picks : 0;
+    const entry = { ts: new Date().toISOString(), gen, tag, picks: s.picks, wins: s.wins, losses: s.losses, wr, elo: elo[tag] };
+    try { fs.appendFileSync(file, JSON.stringify(entry) + '\n'); } catch {}
+  }
 }
 
 // Build PFSP candidates (modules + HOF) : on inclut TOUJOURS le set de base
@@ -221,7 +286,7 @@ function toOpponentAndId(picked: any) {
 }
 
 // ===== Serial evaluator =====
-async function evalGenomeSerial(g: Genome, opts: CEMOpts, elo: Record<string, number>) {
+async function evalGenomeSerial(g: Genome, opts: CEMOpts, elo: Record<string, number>, stats: PFSPStats) {
   let total = 0;
   const baseCands = buildCandidates(opts.oppPool, HOF);
   seedEloWithCandidates(elo, baseCands);
@@ -235,7 +300,7 @@ async function evalGenomeSerial(g: Genome, opts: CEMOpts, elo: Record<string, nu
     const picked = pickOpponentRoundRobin(cands, 0, baseSeed);
 const { opponent, oppId } = toOpponentAndId(picked);
 
-    logPFSPPick(opts, {
+    logPFSPPick(opts, stats, {
       ts: new Date().toISOString(),
       phase: 'serial',
       seed: baseSeed,
@@ -263,13 +328,13 @@ const { opponent, oppId } = toOpponentAndId(picked);
     total += diff;
 
     recordMatch(elo, oppId, diff > 0);
-    logPFSPResult(opts, { ts: new Date().toISOString(), phase: 'serial', seed: baseSeed, oppId, diff });
+    logPFSPResult(opts, stats, { ts: new Date().toISOString(), phase: 'serial', seed: baseSeed, oppId, diff });
   }
   return total / opts.seedsPer;
 }
 
 // ===== Parallel evaluator =====
-async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<string, number>) {
+async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<string, number>, stats: PFSPStats) {
   const jobs = Math.max(1, Math.floor(opts.jobs || 1));
   const workerUrl = new URL("./worker-bootstrap.cjs", import.meta.url);
 
@@ -290,7 +355,7 @@ async function evalGenomeParallel(pop: Genome[], opts: CEMOpts, elo: Record<stri
       const picked = pickOpponentRoundRobin(cands, gi, baseSeed);
 const { opponent, oppId } = toOpponentAndId(picked);
 
-      logPFSPPick(opts, {
+      logPFSPPick(opts, stats, {
         ts: new Date().toISOString(),
         phase: 'parallel',
         gi,
@@ -329,7 +394,7 @@ const { opponent, oppId } = toOpponentAndId(picked);
 
           sums[t.gi] += msg.diff;
           recordMatch(elo, t.oppId, msg.diff > 0);
-          logPFSPResult(opts, {
+          logPFSPResult(opts, stats, {
             ts: new Date().toISOString(),
             phase: 'parallel',
             gi: t.gi,
@@ -372,6 +437,9 @@ export async function trainCEM(opts: CEMOpts) {
   HOF.length = 0; // reset HoF
   const elo = loadElo(artDir); // persisted across runs
 
+  const basePoolSize = opts.oppPool.length;
+  const pfspStats: PFSPStats = {};
+
   let m = [15, 1700, 1500];
   let s = [6, 120, 120];
   let bestEverFit = -Infinity;
@@ -381,6 +449,10 @@ export async function trainCEM(opts: CEMOpts) {
   const emaAlpha = 0.6;
 
   for (let gen = 0; gen < opts.gens; gen++) {
+    if (opts.hofRefreshInterval && gen % opts.hofRefreshInterval === 0) {
+      refreshHallOfFame(opts.artifactsDir);
+    }
+
     const pop: Genome[] = Array.from({ length: opts.pop }, () => sampleGenome(m, s));
     if (ema.length !== pop.length) {
       for (let i=ema.length; i<pop.length; i++) ema.push(null);
@@ -388,8 +460,8 @@ export async function trainCEM(opts: CEMOpts) {
 
     const jobs = Math.max(1, Math.floor(opts.jobs || 1));
     const fits = jobs <= 1
-      ? await (async () => { const arr:number[] = []; for (let i=0;i<pop.length;i++) arr.push(await evalGenomeSerial(pop[i], opts, elo)); return arr; })()
-      : await evalGenomeParallel(pop, opts, elo);
+      ? await (async () => { const arr:number[] = []; for (let i=0;i<pop.length;i++) arr.push(await evalGenomeSerial(pop[i], opts, elo, pfspStats)); return arr; })()
+      : await evalGenomeParallel(pop, opts, elo, pfspStats);
 
     const smoothed = fits.map((f, i) => {
       const prev = ema[i];
@@ -427,6 +499,12 @@ export async function trainCEM(opts: CEMOpts) {
     s = s.map((sv, i) => clamp(alpha * sNew[i] + (1 - alpha) * sv, 1, 200));
 
     console.log(`CEM gen ${gen}: bestRaw=${genBestFit.toFixed(2)} bestEMA=${genBestEMA.toFixed(2)} m=[${m.map(x=>Math.round(x)).join(',')}] (jobs=${jobs}) env=CRN(bpp 2-4, ghosts 8-28)`);
+
+    logTelemetry(opts, pfspStats, elo, gen);
+    if (opts.oppRotateInterval && (gen + 1) % opts.oppRotateInterval === 0) {
+      rotateOpponentPool(opts, elo, pfspStats, basePoolSize);
+    }
+    for (const k in pfspStats) delete pfspStats[k];
   }
 
   if (bestEver) {
