@@ -252,6 +252,15 @@ pnpm -C packages/sim-runner start train \
   --opp-pool greedy,random,camper,stunner,hof --hof 8 --seed 42
 ```
 
+### Sample CMA-ES Run
+```
+pnpm -C packages/sim-runner start train --subject hybrid --algo cma \
+  --pop 4 --gens 2 --seeds-per 1 --eps-per-seed 1 \
+  --opp-pool greedy,random,camper,stunner --seed 42
+```
+This quick run yielded a best fitness of 37.25 (≈37.5% win rate) and produced the
+parameters committed in `packages/agents/hybrid-params.ts`.
+
 ## Export & Deployment
 After training, export a CodinGame-ready bot.
 
