@@ -45,7 +45,7 @@ type Ctx = {
   bustersPerPlayer?: number;
 };
 
-type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number };
+type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number; stunnedFor?: number };
 
 type Obs = {
   tick: number;
@@ -347,9 +347,12 @@ export function act(ctx: Ctx, obs: Obs) {
   }
 
   // Stun priority: enemy carrier in range, else nearest in bust range
-  let targetEnemy: Ent | undefined = enemies.find(e => e.state === 1 && (e.range ?? dist(me.x,me.y,e.x,e.y)) <= TUNE.STUN_RANGE);
-  if (!targetEnemy && enemies.length && (enemies[0].range ?? dist(me.x,me.y,enemies[0].x,enemies[0].y)) <= BUST_MAX) {
-    targetEnemy = enemies[0];
+  let targetEnemy: Ent | undefined = enemies.find(e =>
+    e.state === 1 && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x,me.y,e.x,e.y)) <= TUNE.STUN_RANGE);
+  if (!targetEnemy) {
+    const cand = enemies.find(e =>
+      e.state !== 2 && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x,me.y,e.x,e.y)) <= BUST_MAX);
+    if (cand) targetEnemy = cand;
   }
   if (canStun && targetEnemy) {
     const duel = duelStunDelta({

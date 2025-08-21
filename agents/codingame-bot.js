@@ -70,8 +70,14 @@ while (true) {
     // 2) STUN priority: enemy carrying within STUN_RANGE, else nearest enemy within BUST_MAX
     const canStun = (tick >= m.stunReadyAt) && !stunned;
     let toStun = null;
-    for (const er of enemiesR){ if (er.e.state===1 && er.r <= STUN_RANGE) { toStun = er.e; break; } }
-    if (!toStun && enemiesR.length && enemiesR[0].r <= BUST_MAX) toStun = enemiesR[0].e;
+    for (const er of enemiesR){
+      if (er.e.state === 2) continue;
+      if (er.e.state===1 && er.r <= STUN_RANGE) { toStun = er.e; break; }
+    }
+    if (!toStun){
+      const cand = enemiesR.find(er => er.e.state !== 2 && er.r <= BUST_MAX);
+      if (cand) toStun = cand.e;
+    }
     if (canStun && toStun){ actions[ai] = 'STUN '+toStun.id; m.stunReadyAt = tick + STUN_CD; continue; }
 
     // 3) RADAR once at RADAR_TURN by scout
