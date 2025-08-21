@@ -16,7 +16,7 @@ test('loop ends when no ghosts remain and none are carried', () => {
   const b = state.busters[0];
   const ghost = state.ghosts[0];
   b.x = TEAM0_BASE.x; b.y = TEAM0_BASE.y;
-  ghost.x = b.x + RULES.BUST_MIN; ghost.y = b.y; ghost.endurance = 1;
+  ghost.x = b.x + RULES.BUST_MIN + 1; ghost.y = b.y; ghost.endurance = 1;
   // emulate driver loop
   while (state.tick < MAX_TICKS) {
     const actions: ActionsByTeam = state.tick === 0
