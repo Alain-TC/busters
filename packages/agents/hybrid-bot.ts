@@ -269,6 +269,56 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
   return assigned;
 }
 
+type Cand = {
+  act: any;
+  tag: string;
+  reason: string;
+  enemy?: Ent;
+  ghost?: Ent;
+};
+
+/** Score a concrete action candidate */
+function scoreCand(me: Ent, cand: Cand, friends: Ent[], enemies: Ent[], canStun: boolean): number {
+  const x = cand.act.x ?? me.x;
+  const y = cand.act.y ?? me.y;
+  const meFuture = { ...me, x, y };
+
+  let s = 0;
+
+  // spacing penalty (stay away from friends)
+  let nearest = Infinity;
+  for (const f of friends) {
+    if (f.id === me.id) continue;
+    const d = dist(x, y, f.x, f.y);
+    if (d < nearest) nearest = d;
+  }
+  if (nearest < TUNE.SPACING) s -= (TUNE.SPACING - nearest) * WEIGHTS.DIST_PEN;
+
+  if (cand.ghost) {
+    s += contestedBustDelta({
+      me: meFuture,
+      ghost: { x: cand.ghost.x, y: cand.ghost.y, id: cand.ghost.id },
+      enemies,
+      bustMin: BUST_MIN,
+      bustMax: BUST_MAX,
+      stunRange: TUNE.STUN_RANGE,
+      canStunMe: canStun,
+    });
+  }
+
+  if (cand.enemy) {
+    s += duelStunDelta({
+      me: meFuture,
+      enemy: cand.enemy,
+      canStunMe: canStun,
+      canStunEnemy: cand.enemy.state !== 2,
+      stunRange: TUNE.STUN_RANGE,
+    });
+  }
+
+  return s;
+}
+
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
@@ -372,12 +422,17 @@ export function act(ctx: Ctx, obs: Obs) {
   const myTask = planAssign.get(me.id);
 
   if (myTask) {
+    const cands: Cand[] = [];
+
     if (myTask.type === "BUST" && ghosts.length) {
       const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];
       const r = dist(me.x, me.y, g.x, g.y);
-      if (r >= BUST_MIN && r <= BUST_MAX) return dbg({ type: "BUST", ghostId: g.id }, "BUST_RING", "task_bust");
+      if (r >= BUST_MIN && r <= BUST_MAX) cands.push({ act: { type: "BUST", ghostId: g.id }, tag: "BUST_RING", reason: "task_bust", ghost: g });
       const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
-      return dbg({ type: "MOVE", x: chase.x, y: chase.y }, "TASK_BUST_CHASE", "to_ghost");
+      cands.push({ act: { type: "MOVE", x: chase.x, y: chase.y }, tag: "TASK_BUST_CHASE", reason: "to_ghost", ghost: g });
+      const dir = norm(g.x - me.x, g.y - me.y);
+      const ring = spacedTarget(me, { x: g.x - dir.x * BUST_MIN, y: g.y - dir.y * BUST_MIN }, friends);
+      cands.push({ act: { type: "MOVE", x: ring.x, y: ring.y }, tag: "TASK_BUST_RING", reason: "ring", ghost: g });
     }
 
     if (myTask.type === "INTERCEPT") {
@@ -385,20 +440,27 @@ export function act(ctx: Ctx, obs: Obs) {
       if (enemy) {
         const P = estimateInterceptPoint(me, enemy, MY);
         const tgt = spacedTarget(me, P, friends);
-        return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "est_int");
+        cands.push({ act: { type: "MOVE", x: tgt.x, y: tgt.y }, tag: "INTERCEPT", reason: "est_int", enemy });
+        const mid = spacedTarget(me, myTask.target, friends);
+        cands.push({ act: { type: "MOVE", x: mid.x, y: mid.y }, tag: "INTERCEPT", reason: "midpoint", enemy });
+      } else {
+        const tgt = spacedTarget(me, myTask.target, friends);
+        cands.push({ act: { type: "MOVE", x: tgt.x, y: tgt.y }, tag: "INTERCEPT", reason: "midpoint" });
       }
-      const tgt = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "INTERCEPT", "midpoint");
     }
 
     if (myTask.type === "DEFEND") {
       const tgt = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: tgt.x, y: tgt.y }, "DEFEND", "near_base");
+      cands.push({ act: { type: "MOVE", x: tgt.x, y: tgt.y }, tag: "DEFEND", reason: "near_base" });
+      const home = spacedTarget(me, MY, friends);
+      cands.push({ act: { type: "MOVE", x: home.x, y: home.y }, tag: "DEFEND", reason: "home" });
     }
 
     if (myTask.type === "BLOCK") {
       const hold = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: hold.x, y: hold.y }, "BLOCK", "enemy_ring");
+      cands.push({ act: { type: "MOVE", x: hold.x, y: hold.y }, tag: "BLOCK", reason: "enemy_ring" });
+      const toEnemy = spacedTarget(me, EN, friends);
+      cands.push({ act: { type: "MOVE", x: toEnemy.x, y: toEnemy.y }, tag: "BLOCK", reason: "enemy_base" });
     }
 
     if (myTask.type === "EXPLORE") {
@@ -410,10 +472,25 @@ export function act(ctx: Ctx, obs: Obs) {
         if (dist(me.x, me.y, cur.x, cur.y) < 800) Mx.wp = (Mx.wp + 1) % path.length;
         const next = path[Mx.wp % path.length];
         const P = spacedTarget(me, next, friends);
-        return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", `wp_${Mx.wp}`);
+        cands.push({ act: { type: "MOVE", x: P.x, y: P.y }, tag: "TASK_EXPLORE", reason: `wp_${Mx.wp}` });
+        const F = spacedTarget(me, myTask.target, friends);
+        cands.push({ act: { type: "MOVE", x: F.x, y: F.y }, tag: "TASK_EXPLORE", reason: "frontier" });
+      } else {
+        const P = spacedTarget(me, myTask.target, friends);
+        cands.push({ act: { type: "MOVE", x: P.x, y: P.y }, tag: "TASK_EXPLORE", reason: "frontier" });
+        const back = spacedTarget(me, MY, friends);
+        cands.push({ act: { type: "MOVE", x: back.x, y: back.y }, tag: "TASK_EXPLORE", reason: "home" });
       }
-      const P = spacedTarget(me, myTask.target, friends);
-      return dbg({ type: "MOVE", x: P.x, y: P.y }, "TASK_EXPLORE", "frontier");
+    }
+
+    if (cands.length) {
+      let best = cands[0];
+      let bestScore = -Infinity;
+      for (const c of cands) {
+        const s = scoreCand(me, c, friends, enemiesAll, canStun);
+        if (s > bestScore) { bestScore = s; best = c; }
+      }
+      return dbg(best.act, best.tag, best.reason);
     }
   }
 
