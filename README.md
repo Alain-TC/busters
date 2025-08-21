@@ -69,6 +69,8 @@ pnpm cg:export:champ    # champion from tournament standings
 
 `cg:export:genome` reads `packages/sim-runner/artifacts/simrunner_best_genome.json` (or `artifacts/simrunner_best_genome.json` if present). `cg:export:champ` picks the top entry in `packages/sim-runner/artifacts/tournament_standings.json`. Paste the resulting `agents/codingame-bot.js` into the CodinGame IDE.
 
+The long training helper (`scripts/train_long.sh`) runs this exporter automatically, writing `agents/evolved-bot.cg.js` with a full `readline()`/`console.log()` loop and without optional chaining so it executes in the CodinGame IDE.
+
 ## Run Local Tournaments
 Short names `greedy`, `random`, `evolved` are resolved by the loader to absolute file paths.
 

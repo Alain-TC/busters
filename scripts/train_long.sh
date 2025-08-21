@@ -110,12 +110,15 @@ TOP_BOT="agents/evolved-bot.js"
 CG_BOT="agents/evolved-bot.cg.js"
 
 if [[ -f "$TOP_BOT" ]]; then
-  echo ">> Exporting CodinGame-compatible bot -> $CG_BOT"
-  # Strip ESM exports so you can paste it directly in CodinGame
-  sed -E 's/^export (const|function) /\1 /' "$TOP_BOT" > "$CG_BOT"
-  # Timestamped backups
+  echo ">> Exporting CodinGame-compatible bot via scripts/export-codingame.ts -> $CG_BOT"
+  if [[ "$SUBJECT" == "hybrid" ]]; then
+    pnpm tsx scripts/export-codingame.ts --from hybrid --weights "$BEST_ART" --out "$CG_BOT"
+  else
+    pnpm tsx scripts/export-codingame.ts --from genome --out "$CG_BOT"
+  fi
+  # Timestamped backups of both ESM & CG variants
   cp "$TOP_BOT" "agents/evolved-bot.${TS}.${TAG}.js"
-  cp "$CG_BOT"  "agents/evolved-bot.${TS}.${TAG}.cg.js"
+  cp "$CG_BOT" "agents/evolved-bot.${TS}.${TAG}.cg.js"
 else
   echo "WARN: $TOP_BOT not found — did training generate it?"
 fi
