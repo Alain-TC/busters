@@ -357,7 +357,7 @@ export function act(ctx: Ctx, obs: Obs) {
       canStunMe: true,
       canStunEnemy: targetEnemy.state !== 2,
       stunRange: TUNE.STUN_RANGE,
-    });
+    }) + (targetEnemy.state === 1 ? releaseBlockDelta({ blocker: me, carrier: targetEnemy, myBase: MY, stunRange: TUNE.STUN_RANGE }) : 0);
     if (duel >= 0) {
       mem.get(me.id)!.stunReadyAt = tick + STUN_CD;
       return dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat");
