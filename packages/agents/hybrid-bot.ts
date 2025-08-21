@@ -11,6 +11,7 @@ import {
   contestedBustDelta,
   releaseBlockDelta,
 } from "./micro";
+import { hungarian } from "./hungarian";
 
 // Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
 const fog = new Fog();
@@ -243,13 +244,28 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
   return s;
 }
 
-/** Greedy auction: assigns at most one task per buster (fast & fine here) */
+/** Auction/assignment: use Hungarian for optimal matching when manageable */
 function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number): Map<number, Task> {
   const assigned = new Map<number, Task>();
+
+  // Use Hungarian when both team and task sizes are reasonable
+  if (team.length && tasks.length && team.length * tasks.length <= 100) {
+    const cost = team.map(b =>
+      tasks.map(t => -scoreAssign(b, t, enemies, MY, tick))
+    );
+    const match = hungarian(cost);
+    for (let i = 0; i < team.length; i++) {
+      const ti = match[i];
+      if (ti >= 0 && ti < tasks.length) {
+        assigned.set(team[i].id, tasks[ti]);
+      }
+    }
+    return assigned;
+  }
+
+  // Fallback greedy heuristic
   const freeB = new Set(team.map(b => b.id));
   const freeT = new Set(tasks.map((_, i) => i));
-
-  // Precompute scores
   const S: { b: number; t: number; s: number }[] = [];
   for (let bi = 0; bi < team.length; bi++) {
     for (let ti = 0; ti < tasks.length; ti++) {
@@ -257,7 +273,6 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
     }
   }
   S.sort((a, b) => b.s - a.s);
-
   for (const { b, t } of S) {
     const bId = team[b].id;
     if (!freeB.has(bId) || !freeT.has(t)) continue;
@@ -268,6 +283,10 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
   }
   return assigned;
 }
+
+// Expose internals for testing
+export const __runAuction = runAuction;
+export const __scoreAssign = scoreAssign;
 
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
