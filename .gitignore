@@ -20,3 +20,6 @@ my_cg_bot.js
 .vscode/
 .idea/
 
+# backup files
+*.bak
+*.bak.*
