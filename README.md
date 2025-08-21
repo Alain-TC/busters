@@ -11,6 +11,7 @@ Evolves a [CodinGame "Busters"](https://www.codingame.com/multiplayer/bot-progra
 - [View Replays](#view-replays)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
+- [EVOL2 Strategy](docs/EVOL2.md)
 
 ## Current Status
 - Serial sanity ✅
