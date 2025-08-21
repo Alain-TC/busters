@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, __mem, __pMem } from './hybrid-bot';
 import { HybridState } from './lib/state';
+import { Fog } from './fog';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
@@ -32,23 +33,32 @@ test('patrol indices reset on new match', () => {
   assert.ok(!__pMem.has(99));
 });
 
-test('ghost probability map decays and updates', () => {
+test('ghost probability map normalizes, diffuses, and clears seen areas', () => {
   const spawns = [{ x: 100, y: 100 }];
-  const st = new HybridState({ w: 400, h: 400 }, 2, 2, undefined, spawns, 0.5);
+  const st = new HybridState({ w: 400, h: 400 }, 2, 2, undefined, spawns, 1);
 
-  let top = st.topGhostCells(1)[0];
-  assert.ok(top.prob > 0);
-  const initial = top.prob;
+  st.diffuseGhosts();
+  const sum1 = st.ghostProb.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum1 - 1) < 1e-6);
+  // diffusion spreads mass to neighbors
+  assert.ok(st.ghostProb.slice(1).some(v => v > 0));
 
-  st.decayGhosts();
-  top = st.topGhostCells(1)[0];
-  assert.ok(top.prob < initial);
+  const before = st.ghostProb[0];
+  st.subtractSeen({ x: 100, y: 100 }, 200);
+  assert.ok(st.ghostProb[0] < before);
+  const sum2 = st.ghostProb.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum2 - 1) < 1e-6);
+});
 
-  st.updateGhosts([{ x: 100, y: 100 }]);
-  top = st.topGhostCells(1)[0];
-  assert.equal(top.prob, 1);
-
-  st.updateGhosts([], [{ x: 100, y: 100 }]);
-  const probAfterCapture = st.ghostProbAt({ x: 100, y: 100 });
-  assert.equal(probAfterCapture, 0);
+test('fog heat diffuses, normalizes, and reduces when visited', () => {
+  const f = new Fog();
+  f.bumpGhost(8000, 4500);
+  f.beginTick(1);
+  const total = Array.from((f as any).heat).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(total - 1) < 1e-6);
+  const idx = (f as any).idxOf(8000, 4500);
+  const before = (f as any).heat[idx];
+  f.markVisited({ x: 8000, y: 4500 });
+  const after = (f as any).heat[idx];
+  assert.ok(after < before);
 });

@@ -84,6 +84,7 @@ export class HybridState {
     for (let i = 0; i < this.ghostProb.length; i++) {
       this.ghostProb[i] *= this.ghostDecay;
     }
+    this.normalizeGhosts();
   }
 
   /** Update probabilities with observed or captured ghosts */
@@ -96,6 +97,65 @@ export class HybridState {
       const i = this.idxFromPoint(g);
       this.ghostProb[i] = 0;
     }
+    this.normalizeGhosts();
+  }
+
+  /** Diffuse probabilities to neighboring cells */
+  diffuseGhosts() {
+    const next = new Array(this.ghostProb.length).fill(0);
+    for (let cy = 0; cy < this.rows; cy++) {
+      for (let cx = 0; cx < this.cols; cx++) {
+        const i = cy * this.cols + cx;
+        const v = this.ghostProb[i];
+        const share = v / 5; // self + 4-neighbors
+        // self
+        next[i] += share;
+        const nbs = [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ];
+        for (const [dx, dy] of nbs) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx >= 0 && nx < this.cols && ny >= 0 && ny < this.rows) {
+            next[ny * this.cols + nx] += share;
+          } else {
+            next[i] += share; // reflect at borders
+          }
+        }
+      }
+    }
+    for (let i = 0; i < this.ghostProb.length; i++) this.ghostProb[i] = next[i];
+    this.normalizeGhosts();
+  }
+
+  /** Reduce probability mass in a vision circle */
+  subtractSeen(p: Pt, r: number) {
+    const x0 = clamp(Math.floor((p.x - r) / this.cellW), 0, this.cols - 1);
+    const x1 = clamp(Math.floor((p.x + r) / this.cellW), 0, this.cols - 1);
+    const y0 = clamp(Math.floor((p.y - r) / this.cellH), 0, this.rows - 1);
+    const y1 = clamp(Math.floor((p.y + r) / this.cellH), 0, this.rows - 1);
+    const r2 = r * r;
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const cxm = cx * this.cellW + this.cellW / 2;
+        const cym = cy * this.cellH + this.cellH / 2;
+        if ((cxm - p.x) * (cxm - p.x) + (cym - p.y) * (cym - p.y) <= r2) {
+          const i = cy * this.cols + cx;
+          this.ghostProb[i] *= 0.2;
+        }
+      }
+    }
+    this.normalizeGhosts();
+  }
+
+  /** Normalize probabilities to sum to 1 */
+  normalizeGhosts() {
+    let sum = 0;
+    for (const v of this.ghostProb) sum += v;
+    if (sum <= 0) return;
+    for (let i = 0; i < this.ghostProb.length; i++) this.ghostProb[i] /= sum;
   }
 
   /** Center points of top-N cells by probability (descending) */

@@ -52,6 +52,8 @@ export class Fog {
       this.heat[i] *= 0.97; // gentle decay
       if (this.heat[i] < 0.02) this.heat[i] = 0;
     }
+    this.diffuse();
+    this.normalize();
   }
 
   private idxOf(x: number, y: number): number {
@@ -63,6 +65,8 @@ export class Fog {
   markVisited(p: Pt) {
     const i = this.idxOf(p.x, p.y);
     this.last[i] = this.tick;
+    this.heat[i] *= 0.5;
+    this.normalize();
   }
 
   /** Clear vision circle (approx) by setting heat low & refresh visited in the disk */
@@ -84,6 +88,7 @@ export class Fog {
         }
       }
     }
+    this.normalize();
   }
 
   /** Positive evidence: increase belief near a ghost sighting */
@@ -103,36 +108,67 @@ export class Fog {
         this.heat[i] += 0.8 * w;
       }
     }
+    this.normalize();
   }
 
-  /** Return a good frontier cell center from `from`, balancing info gain & distance */
-  pickFrontierTarget(from: Pt): Pt {
-    // Score: unseen age + belief heat - distance penalty
-    // unseen boost: cells never visited get high bonus
-    let bestI = 0;
-    let bestS = -1e9;
+  private diffuse() {
+    const next = new Float32Array(this.heat.length);
+    for (let gy = 0; gy < GY; gy++) {
+      for (let gx = 0; gx < GX; gx++) {
+        const i = gy * GX + gx;
+        const v = this.heat[i];
+        const share = v / 5; // self + 4-neighbors
+        next[i] += share;
+        const nbs = [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ];
+        for (const [dx, dy] of nbs) {
+          const nx = gx + dx, ny = gy + dy;
+          if (nx >= 0 && nx < GX && ny >= 0 && ny < GY) {
+            next[ny * GX + nx] += share;
+          } else {
+            next[i] += share;
+          }
+        }
+      }
+    }
+    this.heat = next;
+  }
 
+  private normalize() {
+    let sum = 0;
+    for (const v of this.heat) sum += v;
+    if (sum <= 0) return;
+    for (let i = 0; i < this.heat.length; i++) this.heat[i] /= sum;
+  }
+
+  /** Frontier score and target based on age * distance * heat */
+  frontier(from: Pt): { target: Pt; score: number } {
+    let bestI = 0;
+    let bestS = -1;
     for (let gy = 0; gy < GY; gy++) {
       for (let gx = 0; gx < GX; gx++) {
         const i = gy * GX + gx;
         const cx = gx * CELL + CELL / 2;
         const cy = gy * CELL + CELL / 2;
-
-        // time since visited
         const lv = this.last[i];
-        const age = (lv < 0) ? 200 : (this.tick - lv); // never seen: strong bonus (200)
-        const belief = this.heat[i] * 30;              // scale belief to compete with age
-
+        const age = lv < 0 ? 200 : (this.tick - lv);
         const d = dist(from.x, from.y, cx, cy);
-        const s = age + belief - 0.0032 * d;           // simple travel cost
-
-        if (s > bestS) { bestS = s; bestI = i; }
+        const score = age * d * (this.heat[i] + 1);
+        if (score > bestS) { bestS = score; bestI = i; }
       }
     }
-
     const bx = (bestI % GX) * CELL + CELL / 2;
     const by = Math.floor(bestI / GX) * CELL + CELL / 2;
-    return { x: clamp(bx, 0, W), y: clamp(by, 0, H) };
+    return { target: { x: clamp(bx, 0, W), y: clamp(by, 0, H) }, score: bestS };
+  }
+
+  /** Return frontier target only */
+  pickFrontierTarget(from: Pt): Pt {
+    return this.frontier(from).target;
   }
 }
 

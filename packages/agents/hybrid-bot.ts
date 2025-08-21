@@ -170,8 +170,13 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
+    let baseScore = WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD;
     const payload: any = { id: mate.id };
-    if (!early) target = state.bestFrontier();
+    if (!early) {
+      const fr = fog.frontier(mate);
+      target = fr.target;
+      baseScore += fr.score * 1e-5; // scale frontier score
+    }
     if (!target) {
       const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
       const Mx = MPatrol(mate.id);
@@ -180,7 +185,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
       target = path[wp];
       payload.wp = wp;
     }
-    tasks.push({ type: "EXPLORE", target: target!, payload, baseScore: WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD });
+    tasks.push({ type: "EXPLORE", target: target!, payload, baseScore });
   }
 
   return tasks;
@@ -279,10 +284,12 @@ export function act(ctx: Ctx, obs: Obs) {
   const m = M(me.id);
   const state = getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
+  state.decayGhosts();
+  state.diffuseGhosts();
 
   fog.beginTick(tick);
   const friends = uniqTeam(me, obs.friends);
-  for (const f of friends) { fog.markVisited(f); state.touchVisit(f); }
+  for (const f of friends) { fog.markVisited(f); state.touchVisit(f); state.subtractSeen(f, 400); }
 
   const { my: MY, enemy: EN } = resolveBases(ctx);
   const enemiesObs = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
@@ -294,8 +301,9 @@ export function act(ctx: Ctx, obs: Obs) {
   const enemiesAll = Array.from(enemyMap.values()).sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
   const enemies = enemiesObs;
 
-  if (enemies.length || ghosts.length) fog.clearCircle(me, 2200);
-  for (const g of ghosts) fog.bumpGhost(g.x, g.y);
+  if (enemies.length || ghosts.length) { fog.clearCircle(me, 2200); state.subtractSeen(me, 2200); }
+  for (const g of ghosts) { fog.bumpGhost(g.x, g.y); }
+  if (ghosts.length) state.updateGhosts(ghosts.map(g => ({ x: g.x, y: g.y }))); 
 
   const bpp = ctx.bustersPerPlayer ?? Math.max(3, friends.length || 3);
   (me as any).localIndex = (me as any).localIndex ?? (me.id % bpp);
