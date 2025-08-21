@@ -90,3 +90,20 @@ test('runAuction aligns with Hungarian optimal assignment', () => {
     }
   }
 });
+
+test('bot does not stun an already stunned enemy', () => {
+  __mem.clear();
+  const ctx: any = {};
+  const self = { id: 1, x: 0, y: 0, state: 0 };
+  let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  let action = act(ctx, obs);
+  assert.equal(action.type, 'STUN');
+
+  obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 2, range: 0, stunnedFor: 5 }], ghostsVisible: [] };
+  action = act(ctx, obs);
+  assert.notEqual(action.type, 'STUN');
+
+  obs = { tick: 22, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  action = act(ctx, obs);
+  assert.equal(action.type, 'STUN');
+});
