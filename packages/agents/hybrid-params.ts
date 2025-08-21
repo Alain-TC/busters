@@ -1,6 +1,6 @@
 // packages/agents/hybrid-params.ts
 // -----------------------------------------------------------------------------
-// Hybrid parameters (tuned by CEM).
+// Hybrid parameters (tuned by CMA-ES).
 // - The trainer can overwrite this file with new values.
 // - Keep the shape (keys) stable so imports in hybrid-bot.ts never break.
 // -----------------------------------------------------------------------------
@@ -34,28 +34,28 @@ export type Weights = {
 // DEFAULTS (safe, reasonable). The trainer will usually overwrite these.
 // -----------------------------------------------------------------------------
 export const TUNE: Tune = {
-  RELEASE_DIST: 1600,
-  STUN_RANGE: 1760,
+  RELEASE_DIST: 1632,
+  STUN_RANGE: 1834,
   RADAR1_TURN: 2,
   RADAR2_TURN: 55,
-  SPACING: 900,
-  SPACING_PUSH: 280,
-  BLOCK_RING: 1750,
-  DEFEND_RADIUS: 3200,
-  EXPLORE_STEP_REWARD: 1.0,
+  SPACING: 954,
+  SPACING_PUSH: 289,
+  BLOCK_RING: 1670,
+  DEFEND_RADIUS: 3341,
+  EXPLORE_STEP_REWARD: 0.9676032069672904,
 };
 
 export const WEIGHTS: Weights = {
   BUST_BASE: 12,
-  BUST_RING_BONUS: 5,
-  BUST_ENEMY_NEAR_PEN: 3,
-  INTERCEPT_BASE: 14,
-  INTERCEPT_DIST_PEN: 0.004,
+  BUST_RING_BONUS: 7,
+  BUST_ENEMY_NEAR_PEN: 6,
+  INTERCEPT_BASE: 16,
+  INTERCEPT_DIST_PEN: 0.006268810020792386,
   DEFEND_BASE: 10,
-  DEFEND_NEAR_BONUS: 6,
-  BLOCK_BASE: 6,
-  EXPLORE_BASE: 4,
-  DIST_PEN: 0.003,
+  DEFEND_NEAR_BONUS: 4,
+  BLOCK_BASE: 5,
+  EXPLORE_BASE: 3,
+  DIST_PEN: 0.0024519620026867764,
 };
 
 // Default export (some loaders import default)
