@@ -546,8 +546,9 @@ export function executePlan(args: ExecuteArgs) {
 
   if (myTask) {
     const candidates: { act: any; base: number; deltas: number[]; tag: string; reason?: string }[] = [];
+    const dHome = dist(me.x, me.y, MY.x, MY.y);
 
-    if (carrying) {
+    if (carrying && dHome >= BASE_SCORE_RADIUS) {
       const ally = friends
         .filter(f => f.id !== me.id)
         .sort((a, b) => dist(a.x, a.y, MY.x, MY.y) - dist(b.x, b.y, MY.x, MY.y))[0];
@@ -557,7 +558,7 @@ export function executePlan(args: ExecuteArgs) {
       const ty = clamp(me.y + dy * EJECT_RADIUS, 0, H);
       const enemy = enemiesAll[0];
       const deltas: number[] = [];
-      deltas.push(micro(() => ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally }))); 
+      deltas.push(micro(() => ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })));
       if (enemy) {
         deltas.push(
           micro(() =>
@@ -582,7 +583,6 @@ export function executePlan(args: ExecuteArgs) {
     }
 
     if (myTask.type === "CARRY") {
-      const dHome = dist(me.x, me.y, MY.x, MY.y);
       if (dHome < Math.min(TUNE.RELEASE_DIST, BASE_SCORE_RADIUS)) {
         candidates.push({ act: { type: "RELEASE" }, base: 120, deltas: [], tag: "RELEASE", reason: "carry" });
       }
