@@ -95,7 +95,9 @@ while (true) {
     if (me.state === 1) {
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
 
-      if (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) {
+      if (dHome <= BASE_SCORE_RADIUS) {
+        out.push('RELEASE carry→score');
+      } else if (dHome < GENOME.releaseDist) {
         // Compute an eject point up to 1760 units toward base
         const dx = myBase.x - me.x;
         const dy = myBase.y - me.y;
@@ -108,11 +110,12 @@ while (true) {
 
           if (dist(tx, ty, myBase.x, myBase.y) < dHome) {
             out.push(`EJECT ${Math.round(tx)} ${Math.round(ty)} carry→eject`);
+            me.state = 0; // mark as free to avoid rebusting same ghost
             continue;
           }
         }
 
-        out.push('RELEASE carry→score');
+        out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
       } else {
         out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
       }
