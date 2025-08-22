@@ -20,97 +20,112 @@ let tick = 0;
 // Track which of our busters already used RADAR (simple local memory)
 const radarUsed = new Set<number>();
 
-const bustersPerPlayer = parseInt(readline(), 10);
-const ghostCount = parseInt(readline(), 10); // value may remain unused
-const myTeamId = parseInt(readline(), 10);
-
-const myBase: Pt = myTeamId === 0 ? { x: 0, y: 0 } : { x: W, y: H };
-const enemyBase: Pt = myTeamId === 0 ? { x: W, y: H } : { x: 0, y: 0 };
-const ctx = { myBase, enemyBase, bounds: { w: W, h: H } };
-
 function d(a: Pt, b: Pt) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
-while (true) {
-  const n = Number(readline());
-  if (Number.isNaN(n)) break;
+export function buildObs(me: any, opp: any[], ghosts: any[], tick: number) {
+  const self: any = {
+    id: me.id,
+    x: me.x,
+    y: me.y,
+    radarUsed: radarUsed.has(me.id)
+  };
+  if (me.state === 1) self.carrying = me.value;
+  else if (me.state === 2) self.stunnedFor = me.value;
+  else self.stunCd = me.value;
 
-  const my: any[] = [];
-  const opp: any[] = [];
-  const ghosts: any[] = [];
+  const enemies = opp.map((e) => ({
+    id: e.id,
+    x: e.x,
+    y: e.y,
+    state: e.state,
+    carrying: e.state === 1 ? e.value : undefined,
+    stunnedFor: e.state === 2 ? e.value : 0,
+    range: d(self, e)
+  }));
 
-  for (let i = 0; i < n; i++) {
-    const [idS, xS, yS, tS, sS, vS] = readline().split(" ");
-    const id = +idS, x = +xS, y = +yS, type = +tS, state = +sS, value = +vS;
-    if (type === myTeamId) my.push({ id, x, y, state, value });
-    else if (type === 1 - myTeamId) opp.push({ id, x, y, state, value });
-    else ghosts.push({ id, x, y, stamina: state, value });
-  }
+  const ghostsVisible = ghosts.map((g) => ({
+    id: g.id,
+    x: g.x,
+    y: g.y,
+    stamina: g.stamina,
+    range: d(self, g)
+  }));
 
-  // For stability, act in ascending id order
-  my.sort((a, b) => a.id - b.id);
+  return { self, enemies, ghostsVisible, tick };
+}
 
-  const lines: string[] = [];
+if (typeof readline === "function") {
+  const bustersPerPlayer = parseInt(readline(), 10);
+  const ghostCount = parseInt(readline(), 10); // value may remain unused
+  const myTeamId = parseInt(readline(), 10);
 
-  for (const me of my) {
-    const self = {
-      id: me.id,
-      x: me.x, y: me.y,
-      stunCd: me.value,                // CG uses `value` for stun cooldown / stun time; good enough for gating STUN
-      radarUsed: radarUsed.has(me.id), // we maintain locally
-      carrying: me.state === 1 ? {} : undefined
-    };
+  const myBase: Pt = myTeamId === 0 ? { x: 0, y: 0 } : { x: W, y: H };
+  const enemyBase: Pt = myTeamId === 0 ? { x: W, y: H } : { x: 0, y: 0 };
+  const ctx = { myBase, enemyBase, bounds: { w: W, h: H } };
 
-    const enemies = opp.map((e) => ({
-      id: e.id, x: e.x, y: e.y,
-      carrying: e.state === 1 ? {} : undefined,
-      range: d(self, e)
-    }));
+  while (true) {
+    const n = Number(readline());
+    if (Number.isNaN(n)) break;
 
-    const ghostsVisible = ghosts.map((g) => ({
-      id: g.id, x: g.x, y: g.y,
-      stamina: g.stamina,
-      range: d(self, g)
-    }));
+    const my: any[] = [];
+    const opp: any[] = [];
+    const ghosts: any[] = [];
 
-    const obs = { self, enemies, ghostsVisible, tick };
-
-    const a = act(ctx, obs) || { type: "MOVE", x: myBase.x, y: myBase.y };
-    switch (a.type) {
-      case "MOVE": {
-        const x = Math.max(0, Math.min(W, Math.round(a.x)));
-        const y = Math.max(0, Math.min(H, Math.round(a.y)));
-        lines.push(`MOVE ${x} ${y}`);
-        break;
-      }
-      case "BUST":
-        lines.push(`BUST ${a.ghostId}`);
-        break;
-      case "RELEASE":
-        lines.push(`RELEASE`);
-        break;
-      case "STUN":
-        lines.push(`STUN ${a.busterId}`);
-        break;
-      case "RADAR":
-        radarUsed.add(me.id);
-        lines.push(`RADAR`);
-        break;
-      case "EJECT":       // Some leagues support EJECT; if not, MOVE fallback is harmless
-        if (typeof a.x === "number" && typeof a.y === "number") {
-          lines.push(`EJECT ${Math.round(a.x)} ${Math.round(a.y)}`);
-        } else {
-          lines.push(`MOVE ${myBase.x} ${myBase.y}`);
-        }
-        break;
-      default:
-        lines.push(`MOVE ${myBase.x} ${myBase.y}`);
-        break;
+    for (let i = 0; i < n; i++) {
+      const [idS, xS, yS, tS, sS, vS] = readline().split(" ");
+      const id = +idS, x = +xS, y = +yS, type = +tS, state = +sS, value = +vS;
+      if (type === myTeamId) my.push({ id, x, y, state, value });
+      else if (type === 1 - myTeamId) opp.push({ id, x, y, state, value });
+      else ghosts.push({ id, x, y, stamina: state, value });
     }
+
+    // For stability, act in ascending id order
+    my.sort((a, b) => a.id - b.id);
+
+    const lines: string[] = [];
+
+    for (const me of my) {
+      const obs = buildObs(me, opp, ghosts, tick);
+      const self = obs.self;
+
+      const a = act(ctx, obs) || { type: "MOVE", x: myBase.x, y: myBase.y };
+      switch (a.type) {
+        case "MOVE": {
+          const x = Math.max(0, Math.min(W, Math.round(a.x)));
+          const y = Math.max(0, Math.min(H, Math.round(a.y)));
+          lines.push(`MOVE ${x} ${y}`);
+          break;
+        }
+        case "BUST":
+          lines.push(`BUST ${a.ghostId}`);
+          break;
+        case "RELEASE":
+          lines.push(`RELEASE`);
+          break;
+        case "STUN":
+          lines.push(`STUN ${a.busterId}`);
+          break;
+        case "RADAR":
+          radarUsed.add(me.id);
+          lines.push(`RADAR`);
+          break;
+        case "EJECT":       // Some leagues support EJECT; if not, MOVE fallback is harmless
+          if (typeof a.x === "number" && typeof a.y === "number") {
+            lines.push(`EJECT ${Math.round(a.x)} ${Math.round(a.y)}`);
+          } else {
+            lines.push(`MOVE ${myBase.x} ${myBase.y}`);
+          }
+          break;
+        default:
+          lines.push(`MOVE ${myBase.x} ${myBase.y}`);
+          break;
+      }
+    }
+
+    // Exactly bustersPerPlayer lines must be printed
+    for (let i = 0; i < bustersPerPlayer; i++) print(lines[i] || `MOVE ${myBase.x} ${myBase.y}`);
+
+    tick++;
   }
-
-  // Exactly bustersPerPlayer lines must be printed
-  for (let i = 0; i < bustersPerPlayer; i++) print(lines[i] || `MOVE ${myBase.x} ${myBase.y}`);
-
-  tick++;
 }
 
