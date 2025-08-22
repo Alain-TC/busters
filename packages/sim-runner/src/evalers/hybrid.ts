@@ -22,7 +22,7 @@ export const HYBRID_CLIP  = {
 
 // Minimal type to match your train code
 export type EvalOpts = {
-  oppPool: string[];      // e.g. ["greedy","stunner","camper","random","hybrid"]
+  oppPool: string[];      // e.g. ["greedy","stunner","camper","random","base-camper","aggressive-stunner","hybrid"]
   seeds: number[];
   epsPerSeed: number;
 };
