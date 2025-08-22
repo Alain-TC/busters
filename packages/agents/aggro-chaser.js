@@ -17,7 +17,7 @@ export function act(ctx, obs) {
   // Enemy priority
   const enemy = (obs.enemies||[]).map(e => ({e, d: Math.hypot(me.x-e.x, me.y-e.y)}))
     .sort((a,b)=>a.d-b.d)[0];
-  if (enemy && enemy.d <= 1760 && me.stunCd <= 0) {
+  if (enemy && enemy.d <= 1760 && me.stunCd <= 0 && (enemy.e.stunnedFor ?? 0) <= 0) {
     return { type:"STUN", busterId: enemy.e.id };
   }
 

@@ -16,7 +16,7 @@ export function act(ctx: AgentContext, obs: Observation): Action {
     .map(e => ({ e, dMe: Math.hypot(me.x - e.x, me.y - e.y), dBase: Math.hypot(ctx.myBase.x - e.x, ctx.myBase.y - e.y) }))
     .filter(e => e.dBase <= 4000)
     .sort((a, b) => a.dMe - b.dMe)[0];
-  if (enemies && enemies.dMe <= 1760 && me.stunCd <= 0) {
+  if (enemies && enemies.dMe <= 1760 && me.stunCd <= 0 && (enemies.e.stunnedFor ?? 0) <= 0) {
     return { type: 'STUN', busterId: enemies.e.id };
   }
 
