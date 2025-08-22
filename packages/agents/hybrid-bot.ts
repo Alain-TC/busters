@@ -15,6 +15,7 @@ import {
   scoreCandidate,
 } from "./micro";
 import { hungarian } from "./hungarian";
+import { clamp, dist, norm } from "@busters/shared";
 
 // Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
 const fog = new Fog();
@@ -28,10 +29,6 @@ const W = 16000, H = 9000;
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
 const EJECT_MAX = 1760;
-
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
-function dist(ax: number, ay: number, bx: number, by: number) { return Math.hypot(ax - bx, ay - by); }
-function norm(dx: number, dy: number) { const d = Math.hypot(dx, dy) || 1; return { x: dx / d, y: dy / d }; }
 
 /** Attach debug metadata to an action */
 function dbg<T extends Record<string, any>>(act: T, tag: string, reason?: string, extra?: any) {
@@ -83,8 +80,8 @@ function resolveBases(ctx: Ctx): { my: Pt; enemy: Pt } {
 function spacedTarget(me: Ent, raw: Pt, friends?: Ent[]): Pt {
   if (!friends || friends.length <= 1) {
     const phase = ((me.id * 9301) ^ 0x9e37) & 1 ? 1 : -1;
-    const dir = norm(raw.x - me.x, raw.y - me.y);
-    const px = -dir.y, py = dir.x;
+    const [dx, dy] = norm(raw.x - me.x, raw.y - me.y);
+    const px = -dy, py = dx;
     return { x: clamp(raw.x + phase * 220 * px, 0, W), y: clamp(raw.y + phase * 220 * py, 0, H) };
   }
   let nearest: Ent | undefined, best = Infinity;
@@ -94,14 +91,14 @@ function spacedTarget(me: Ent, raw: Pt, friends?: Ent[]): Pt {
     if (d < best) { best = d; nearest = f; }
   }
   if (!nearest || best >= TUNE.SPACING) return raw;
-  const away = norm(me.x - nearest.x, me.y - nearest.y);
-  return { x: clamp(raw.x + away.x * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + away.y * TUNE.SPACING_PUSH, 0, H) };
+  const [ax, ay] = norm(me.x - nearest.x, me.y - nearest.y);
+  return { x: clamp(raw.x + ax * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + ay * TUNE.SPACING_PUSH, 0, H) };
 }
 
 /** Base-block ring point (outside enemy base, facing from ours) */
 function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
-  const v = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
-  return { x: clamp(enemyBase.x - v.x * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - v.y * TUNE.BLOCK_RING, 0, H) };
+  const [vx, vy] = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
+  return { x: clamp(enemyBase.x - vx * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - vy * TUNE.BLOCK_RING, 0, H) };
 }
 
 /** ---- Auction / Task machinery ---- */
@@ -453,9 +450,9 @@ export function act(ctx: Ctx, obs: Obs) {
       }
       if ((!canStun && threat) || handoff) {
         const target = handoff ?? MY;
-        const dir = norm(target.x - me.x, target.y - me.y);
-        const tx = clamp(me.x + dir.x * EJECT_MAX, 0, W);
-        const ty = clamp(me.y + dir.y * EJECT_MAX, 0, H);
+        const [dx, dy] = norm(target.x - me.x, target.y - me.y);
+        const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
+        const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
         return dbg({ type: "EJECT", x: tx, y: ty }, "EJECT", handoff ? "handoff" : "threat");
       }
     }
@@ -516,9 +513,9 @@ export function act(ctx: Ctx, obs: Obs) {
     if (carrying) {
       const ally = friends.filter(f => f.id !== me.id).sort((a,b)=> dist(a.x,a.y,MY.x,MY.y) - dist(b.x,b.y,MY.x,MY.y))[0];
       const target = ally ?? MY;
-      const dir = norm(target.x - me.x, target.y - me.y);
-      const tx = clamp(me.x + dir.x * EJECT_MAX, 0, W);
-      const ty = clamp(me.y + dir.y * EJECT_MAX, 0, H);
+      const [dx, dy] = norm(target.x - me.x, target.y - me.y);
+      const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
+      const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
       candidates.push({
         act: { type: "EJECT", x: tx, y: ty },
         base: 95,
