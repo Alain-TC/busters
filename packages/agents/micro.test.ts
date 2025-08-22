@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta, interceptDelta, twoTurnInterceptDelta, twoTurnEjectDelta, resetMicroPerf, microPerf, microOverBudget, MICRO_BUDGET_MS } from './micro';
 import { RULES } from '../shared/src/constants.ts';
-import { STUN_CHECK_RADIUS } from './hybrid-bot';
+import { STUN_CHECK_RADIUS } from './hybrid/planner';
 
 // Verify contested bust uses projected positions
 const STUN = RULES.STUN_RANGE;

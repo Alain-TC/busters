@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog, buildPlan, executePlan, resetHybridMemory, serializeHybridMemory, loadHybridMemory } from './hybrid-bot';
+import { act, executePlan } from './hybrid/actions';
+import { __mem, __pMem, __fog, resetHybridMemory, serializeHybridMemory, loadHybridMemory } from './hybrid/memory';
+import { runAuction as __runAuction, scoreAssign as __scoreAssign, buildTasks as __buildTasks, buildPlan } from './hybrid/planner';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -170,8 +172,8 @@ test('runAuction uses greedy assignment when combinations exceed 100', () => {
 
 test('runAuction respects HUNGARIAN_MAX_COMBOS override', async () => {
   process.env.HUNGARIAN_MAX_COMBOS = '50';
-  const mod = await import('./hybrid-bot.ts?override');
-  const { __runAuction, HUNGARIAN_MAX_COMBOS } = mod;
+  const mod = await import('./hybrid/planner.ts?override');
+  const { runAuction: __runAuction, HUNGARIAN_MAX_COMBOS } = mod;
   const { HybridState } = await import('./lib/state.ts');
   assert.equal(HUNGARIAN_MAX_COMBOS, 50);
   const team = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, x: i * 100, y: 0 }));

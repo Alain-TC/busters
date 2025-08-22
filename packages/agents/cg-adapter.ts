@@ -10,7 +10,7 @@
 declare function readline(): string;
 declare function print(s: string): void;
 
-import { act } from "./hybrid-bot";
+import { act } from "./hybrid";
 
 type Pt = { x: number; y: number };
 
