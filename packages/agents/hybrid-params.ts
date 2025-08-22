@@ -29,6 +29,8 @@ export type Weights = {
   EXPLORE_BASE: number;         // base utility for explore tasks
   SUPPORT_BASE: number;         // base utility for support tasks
   DIST_PEN: number;             // generic distance penalty
+  CARRY_BASE: number;           // base utility for carry tasks
+  CARRY_ENEMY_NEAR_PEN: number; // penalty per enemy near carrier path
 };
 
 // -----------------------------------------------------------------------------
@@ -58,6 +60,8 @@ export const WEIGHTS: Weights = {
   EXPLORE_BASE: 3,
   SUPPORT_BASE: 8,
   DIST_PEN: 0.0024519620026867764,
+  CARRY_BASE: 14,
+  CARRY_ENEMY_NEAR_PEN: 5,
 };
 
 // Default export (some loaders import default)
