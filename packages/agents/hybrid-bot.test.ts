@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign } from './hybrid-bot';
+import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -152,4 +152,27 @@ test('does not eject when stun ready', () => {
   const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
   const actRes = act(ctx, obs);
   assert.notEqual(actRes.type, 'EJECT');
+});
+
+test('buildTasks emits carry tasks for carriers', () => {
+  const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 1000, y: 1000, state: 1 };
+  const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
+  const st = new HybridState();
+  st.updateRoles([self]);
+  const tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  assert.ok(tasks.some(t => t.type === 'CARRY' && t.payload?.id === 1));
+});
+
+test('carrier can switch to higher-scoring task', () => {
+  const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 1000, y: 1000, state: 1, carrying: 4 };
+  const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
+  const st = new HybridState();
+  st.updateRoles([self]);
+  const tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  tasks.push({ type: 'DEFEND', target: { x: 500, y: 500 }, payload: {}, baseScore: 100 });
+  const assigned = __runAuction([self], tasks as any, [], ctx.myBase, 0, st);
+  const myTask = assigned.get(1)!;
+  assert.equal(myTask.type, 'DEFEND');
 });
