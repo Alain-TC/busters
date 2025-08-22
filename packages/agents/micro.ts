@@ -1,7 +1,8 @@
 /** Tiny, fast "micro-rollout" heuristics used inside assignment scores. */
 /** No external deps; keep everything numerically cheap. */
 
-import { RULES } from "@busters/shared";
+// Use shared constants via relative import to avoid package lookup
+import { RULES } from "../shared/src/constants.ts";
 
 const { performance } = globalThis;
 

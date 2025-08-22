@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta, interceptDelta, twoTurnInterceptDelta, twoTurnEjectDelta, resetMicroPerf, microPerf, microOverBudget, MICRO_BUDGET_MS } from './micro';
-import { RULES } from '@busters/shared';
+import { RULES } from '../shared/src/constants.ts';
 
 // Verify contested bust uses projected positions
 const STUN = RULES.STUN_RANGE;

@@ -5,7 +5,8 @@
  *  Keep it tiny and robust; we’ll extend later (ghost probs, priors, etc.).
  */
 
-import { RULES } from "@busters/shared";
+// Pull in shared game constants without relying on workspace resolution
+import { RULES } from "../../shared/src/constants.ts";
 
 export type Pt = { x: number; y: number };
 
