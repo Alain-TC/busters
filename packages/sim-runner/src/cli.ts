@@ -1,7 +1,8 @@
 // packages/sim-runner/src/cli.ts
 import fs from 'fs';
 import path from 'path';
-import { loadBotModule } from './loadBots';
+import { fileURLToPath } from 'url';
+import { loadBotModule, BOT_ALIASES } from './loadBots';
 import { runEpisodes } from './runEpisodes';
 import { runRoundRobin } from './tournament';
 import { trainCEM } from './ga';
@@ -17,6 +18,8 @@ import {
 
 import { selectOpponentsPFSP } from './pfsp';
 import { loadEloTable, saveEloTable, updateElo } from './elo';
+
+const ALIAS_LIST = Object.keys(BOT_ALIASES).join(',');
 
 /* --------------------- CLI helpers --------------------- */
 function getFlag(args: string[], name: string, def?: any) {
@@ -48,18 +51,10 @@ function gaussian(rng: () => number) {
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
 /* ---------------- Opponent pool ---------------- */
-async function resolveOppPool(specList: string[]): Promise<Array<{name: string, bot: any}>> {
+export async function resolveOppPool(specList: string[]): Promise<Array<{name: string, bot: any}>> {
   const mapNameToSpec = (n: string) => {
     const k = n.trim();
-    if (k === 'greedy')  return '@busters/agents/greedy';
-    if (k === 'random')  return '@busters/agents/random';
-    if (k === 'stunner') return '@busters/agents/stunner';
-    if (k === 'camper')  return '@busters/agents/camper';
-    if (k === 'defender') return '@busters/agents/defender';
-    if (k === 'scout')    return '@busters/agents/scout';
-    if (k === 'hybrid')  return '@busters/agents/hybrid';
-    if (k === 'hof')     return '@busters/agents/hof';
-    return k; // assume direct spec
+    return BOT_ALIASES[k] ?? k; // assume direct spec
   };
   const out: Array<{name: string, bot: any}> = [];
   for (const n of specList) {
@@ -476,7 +471,7 @@ async function main() {
     const seedsPer = Number(getFlag(rest, 'seeds-per', 7));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
     const jobs = Number(getFlag(rest, 'jobs', 1)); // reserved
-    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,stunner,camper,defender,scout,base-camper,aggressive-stunner,hof'));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', ALIAS_LIST));
     const subject = String(getFlag(rest, 'subject', '')).trim().toLowerCase();
     const pfsp = getBool(rest, 'pfsp', false);
     const pfspCount = Number(getFlag(rest, 'pfsp-count', 3));
@@ -521,7 +516,7 @@ async function main() {
     }
 
     console.log(`Unknown or empty --subject. Use: --subject hybrid`);
-    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random,defender,scout,base-camper,aggressive-stunner,hof`);
+    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool ${ALIAS_LIST}`);
     return;
   }
 
@@ -625,7 +620,7 @@ async function main() {
 
   console.log(`Usage:
   # Train Hybrid (CEM)
-  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,defender,scout,base-camper,aggressive-stunner,hof [--pfsp]
+  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool ${ALIAS_LIST} [--pfsp]
 
   # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]
@@ -641,5 +636,7 @@ async function main() {
     [--hof-refresh 5] [--rotate-opps 5] [--telemetry artifacts/tag_telemetry.jsonl]
 `);
 }
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
 

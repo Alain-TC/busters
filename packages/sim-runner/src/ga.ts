@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { Worker } from 'worker_threads';
 import { runEpisodes } from './runEpisodes';
-import { loadBotModule } from './loadBots';
+import { loadBotModule, BOT_ALIASES } from './loadBots';
 import { loadEloTable, saveEloTable, updateElo } from './elo';
 
 // ----- Elo helpers -----
@@ -46,17 +46,6 @@ export type Genome = {
 
 const DEFAULT_MODULE = '@busters/agents/greedy';
 
-// map CLI --opp-pool names to module specs
-  const NAME_TO_SPEC: Record<string, string> = {
-    greedy: '@busters/agents/greedy',
-    random: '@busters/agents/random',
-    camper: '@busters/agents/camper',
-    stunner: '@busters/agents/stunner',
-    'base-camper': '@busters/agents/base-camper',
-    'aggressive-stunner': '@busters/agents/aggressive-stunner',
-    defender: '@busters/agents/defender',
-    scout: '@busters/agents/scout',
-  };
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -264,17 +253,17 @@ function logTelemetry(opts: CEMOpts, stats: PFSPStats, elo: Record<string, numbe
 }
 
 // Build PFSP candidates (modules + HOF) : on inclut TOUJOURS le set de base
-function buildCandidates(oppPool: Array<{ name?: string; spec?: string; id?: string }>, hof: Genome[]): PFSPCandidate[] {
+export function buildCandidates(oppPool: Array<{ name?: string; spec?: string; id?: string }>, hof: Genome[]): PFSPCandidate[] {
   const specSet = new Set<string>();
 
   // depuis CLI
   for (const o of oppPool) {
     if (o.spec) specSet.add(o.spec);
-    splitNames(o.name).forEach(n => { const spec = NAME_TO_SPEC[n]; if (spec) specSet.add(spec); });
+    splitNames(o.name).forEach(n => { const spec = BOT_ALIASES[n]; if (spec) specSet.add(spec); });
     if (o.id && o.id.startsWith('@busters/agents/')) specSet.add(o.id);
   }
   // set de base — empêche le syndrome "greedy only"
-  Object.values(NAME_TO_SPEC).forEach(s => specSet.add(s));
+  Object.values(BOT_ALIASES).forEach(s => specSet.add(s));
 
   const cands: PFSPCandidate[] = [];
   for (const spec of specSet) cands.push({ type: 'module', spec, id: spec });

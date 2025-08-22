@@ -85,7 +85,7 @@ For long training runs, `scripts/train_long.sh` invokes the exporter automatical
 See the [EVOL2 milestones](docs/EVOL2.md#milestones-at-a-glance) for project progress.
 
 ## Run Local Tournaments
-Short names `greedy`, `random`, `evolved` are resolved by the loader to absolute file paths.
+Short names like `greedy`, `stunner`, or `hof` are resolved via a centralized alias list (see `packages/sim-runner/src/loadBots.ts`).
 
 ```bash
 pnpm -C packages/sim-runner start tourney \

@@ -15,6 +15,7 @@
     "tsx": "^4.16.2"
   },
   "scripts": {
-    "start": "tsx src/cli.ts"
+    "start": "tsx src/cli.ts",
+    "test": "tsx --test src/*.test.ts src/algos/*.test.ts"
   }
 }
