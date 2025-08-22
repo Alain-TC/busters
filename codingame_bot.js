@@ -16,6 +16,7 @@ const BASE0 = { x: 0, y: 0 }, BASE1 = { x: 16000, y: 9000 };
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_MAX_RANGE = 1760, STUN_CD_TURNS = 20;
 const BASE_SCORE_RADIUS = 1600;
+const EJECT_MAX_RANGE = 1760;
 
 // --- Utility math ---
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx*dx + dy*dy; };
@@ -90,10 +91,27 @@ while (true) {
       continue;
     }
 
-    // Carrying → go home & release when strictly inside base (< BASE_SCORE_RADIUS)
+    // Carrying → consider EJECT toward base before standard MOVE/RELEASE
     if (me.state === 1) {
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
+
       if (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) {
+        // Compute an eject point up to 1760 units toward base
+        const dx = myBase.x - me.x;
+        const dy = myBase.y - me.y;
+        const d = Math.hypot(dx, dy);
+
+        if (d > 0) {
+          const travel = Math.min(d, EJECT_MAX_RANGE);
+          const tx = Math.max(0, Math.min(MAP_W - 1, me.x + (dx / d) * travel));
+          const ty = Math.max(0, Math.min(MAP_H - 1, me.y + (dy / d) * travel));
+
+          if (dist(tx, ty, myBase.x, myBase.y) < dHome) {
+            out.push(`EJECT ${Math.round(tx)} ${Math.round(ty)} carry→eject`);
+            continue;
+          }
+        }
+
         out.push('RELEASE carry→score');
       } else {
         out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
