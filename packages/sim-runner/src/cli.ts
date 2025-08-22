@@ -467,6 +467,7 @@ async function main() {
     const hofRefresh = Number(getFlag(rest, 'hof-refresh', 0));
     const rotateEvery = Number(getFlag(rest, 'rotate-opps', 0));
     const telemetry = String(getFlag(rest, 'telemetry', path.join('packages/sim-runner/artifacts', 'tag_telemetry.jsonl')));
+    const eloOut = String(getFlag(rest, 'elo-out', path.join('packages/sim-runner/artifacts', 'elo.json')));
     const oppPool = oppPoolArg.split(',').map((s) => ({ id: s.trim() })).filter(o => o.id);
     await trainCEM({
       gens, pop, elitePct: 0.2, seedsPer, episodesPerSeed, oppPool, hofSize, seed,
@@ -474,6 +475,7 @@ async function main() {
       hofRefreshInterval: hofRefresh || undefined,
       oppRotateInterval: rotateEvery || undefined,
       telemetryPath: telemetry,
+      eloPath: eloOut,
     });
     return;
   }

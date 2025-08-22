@@ -238,6 +238,9 @@ pnpm -C packages/sim-runner start train \
   --algo cem --pop 24 --gens 12 \
   --seeds-per 7 --seed 42 \
   --opp-pool greedy,random,hof --hof 6
+# optional flags:
+#   --hof-refresh 5      refresh HOF every 5 generations
+#   --elo-out custom/path/elo.json  write Elo ratings here after each gen
 ```
 Outputs are written to `packages/sim-runner/artifacts/`:
 - `simrunner_best_genome.json`
