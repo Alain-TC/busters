@@ -2,7 +2,7 @@
 export const meta = { name: "HybridBaseline" };
 
 // Params are imported so CEM can overwrite them.
-import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
+import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN, Tune, Weights } from "./hybrid-params";
 import { Fog } from "./fog";
 import { HybridState, getState, predictEnemyPath } from "./lib/state";
 import {
@@ -30,8 +30,13 @@ const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
 const fog = new Fog();
 
 /** Bind params locally (reads from hybrid-params) */
-const TUNE = TUNE_IN;
-const WEIGHTS = WEIGHTS_IN as any;
+const TUNE: Tune = TUNE_IN;
+const WEIGHTS: Weights = WEIGHTS_IN as any;
+
+export function setHybridParams(params: { TUNE: Partial<Tune>; WEIGHTS: Partial<Weights> }) {
+  Object.assign(TUNE, params.TUNE);
+  Object.assign(WEIGHTS, params.WEIGHTS);
+}
 
 /** --- Small utils (no imports) --- */
 const W = 16000, H = 9000;

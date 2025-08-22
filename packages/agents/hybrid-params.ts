@@ -64,6 +64,95 @@ export const WEIGHTS: Weights = {
   CARRY_ENEMY_NEAR_PEN: 4,
 };
 
+// Order in which params are mapped to/from vectors
+export const TUNE_KEYS = [
+  "RELEASE_DIST",
+  "STUN_RANGE",
+  "RADAR1_TURN",
+  "RADAR2_TURN",
+  "SPACING",
+  "SPACING_PUSH",
+  "BLOCK_RING",
+  "DEFEND_RADIUS",
+  "EXPLORE_STEP_REWARD",
+] as const;
+
+export const WEIGHT_KEYS = [
+  "BUST_BASE",
+  "BUST_RING_BONUS",
+  "BUST_ENEMY_NEAR_PEN",
+  "INTERCEPT_BASE",
+  "INTERCEPT_DIST_PEN",
+  "DEFEND_BASE",
+  "DEFEND_NEAR_BONUS",
+  "BLOCK_BASE",
+  "EXPLORE_BASE",
+  "SUPPORT_BASE",
+  "DIST_PEN",
+  "CARRY_BASE",
+  "CARRY_ENEMY_NEAR_PEN",
+] as const;
+
+export const HYBRID_ORDER = [...TUNE_KEYS, ...WEIGHT_KEYS];
+export type HybridKey = (typeof HYBRID_ORDER)[number];
+
+// Bounds for each parameter when clamping vectors
+export const HYBRID_BOUNDS: Record<HybridKey, { lo: number; hi: number; round?: boolean }> = {
+  RELEASE_DIST: { lo: 1500, hi: 2000, round: true },
+  STUN_RANGE: { lo: 1750, hi: 2000, round: true },
+  RADAR1_TURN: { lo: 1, hi: 10, round: true },
+  RADAR2_TURN: { lo: 30, hi: 80, round: true },
+  SPACING: { lo: 700, hi: 1000, round: true },
+  SPACING_PUSH: { lo: 200, hi: 400, round: true },
+  BLOCK_RING: { lo: 1500, hi: 2000, round: true },
+  DEFEND_RADIUS: { lo: 3000, hi: 4000, round: true },
+  EXPLORE_STEP_REWARD: { lo: 0.9, hi: 1.0 },
+  BUST_BASE: { lo: 5, hi: 20 },
+  BUST_RING_BONUS: { lo: 5, hi: 10 },
+  BUST_ENEMY_NEAR_PEN: { lo: 2, hi: 8 },
+  INTERCEPT_BASE: { lo: 10, hi: 20 },
+  INTERCEPT_DIST_PEN: { lo: 0.005, hi: 0.01 },
+  DEFEND_BASE: { lo: 8, hi: 15 },
+  DEFEND_NEAR_BONUS: { lo: 4, hi: 8 },
+  BLOCK_BASE: { lo: 5, hi: 8 },
+  EXPLORE_BASE: { lo: 3, hi: 6 },
+  SUPPORT_BASE: { lo: 5, hi: 10 },
+  DIST_PEN: { lo: 0.001, hi: 0.003 },
+  CARRY_BASE: { lo: 10, hi: 20 },
+  CARRY_ENEMY_NEAR_PEN: { lo: 3, hi: 6 },
+};
+
+export const DEFAULT_HYBRID_PARAMS: Record<HybridKey, number> = {
+  ...TUNE,
+  ...WEIGHTS,
+};
+
+function intsForTurns(tune: Tune) {
+  tune.RADAR1_TURN = Math.max(1, Math.round(tune.RADAR1_TURN ?? TUNE.RADAR1_TURN));
+  tune.RADAR2_TURN = Math.max(tune.RADAR1_TURN + 1, Math.round(tune.RADAR2_TURN ?? TUNE.RADAR2_TURN));
+  const roundKeys: Array<keyof Tune> = [
+    "RELEASE_DIST",
+    "STUN_RANGE",
+    "SPACING",
+    "SPACING_PUSH",
+    "BLOCK_RING",
+    "DEFEND_RADIUS",
+  ];
+  for (const k of roundKeys) tune[k] = Math.round(tune[k]);
+}
+
+export function fromVector(vec: number[]): { TUNE: Tune; WEIGHTS: Weights } {
+  const need = HYBRID_ORDER.length;
+  if (vec.length < need) throw new Error(`Vector length ${vec.length} < ${need}`);
+  const t: Tune = { ...TUNE };
+  const w: Weights = { ...WEIGHTS };
+  let i = 0;
+  for (const k of TUNE_KEYS) t[k] = vec[i++];
+  for (const k of WEIGHT_KEYS) w[k] = vec[i++];
+  intsForTurns(t);
+  return { TUNE: t, WEIGHTS: w };
+}
+
 // Default export (some loaders import default)
 const HYBRID_PARAMS = { TUNE, WEIGHTS };
 export default HYBRID_PARAMS;
