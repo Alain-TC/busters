@@ -12,6 +12,7 @@ Evolves a [CodinGame "Busters"](https://www.codingame.com/multiplayer/bot-progra
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
  - [EVOL2 Milestones](docs/EVOL2.md#milestones-at-a-glance)
+- [Game Rules (FR)](#game-rules-fr)
 
 ## Current Status
 - Serial sanity ✅
@@ -122,4 +123,7 @@ pnpm -C packages/viewer dev
 - Add telemetry in replays (action tags).
 - Exporter variants (patrol heuristics).
 - CI: smoke train + tourney on PRs.
+
+## Game Rules (FR)
+Consultez la documentation détaillée : [docs/rules-fr.md](docs/rules-fr.md).
 
