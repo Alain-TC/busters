@@ -4,6 +4,7 @@ import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog } 
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
+import { TUNE } from './hybrid-params';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
@@ -229,6 +230,38 @@ test('buildTasks emits carry tasks for carriers', () => {
   st.updateRoles([self]);
   const tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
   assert.ok(tasks.some(t => t.type === 'CARRY' && t.payload?.id === 1));
+});
+
+test('scheduled RADAR activates at RADAR1_TURN and RADAR2_TURN', () => {
+  __mem.clear();
+  const ctx1: any = { tick: TUNE.RADAR1_TURN };
+  const b1: any = { id: 1, x: 0, y: 0, state: 0, localIndex: 0 };
+  const obs1: any = { tick: TUNE.RADAR1_TURN, self: b1, friends: [], enemies: [], ghostsVisible: [] };
+  const act1 = act(ctx1, obs1);
+  assert.equal(act1.type, 'RADAR');
+
+  __mem.clear();
+  const ctx2: any = { tick: TUNE.RADAR2_TURN };
+  const b2: any = { id: 2, x: 0, y: 0, state: 0, localIndex: 1 };
+  const obs2: any = { tick: TUNE.RADAR2_TURN, self: b2, friends: [], enemies: [], ghostsVisible: [] };
+  const act2 = act(ctx2, obs2);
+  assert.equal(act2.type, 'RADAR');
+});
+
+test('BLOCK tasks redirect to INTERCEPT when a carrier appears', () => {
+  const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 1000, y: 1000, state: 0 };
+  const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
+  const st = new HybridState();
+  st.updateRoles([self]);
+  let tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  assert.ok(tasks.some(t => t.type === 'BLOCK'));
+
+  const carrier: any = { id: 2, x: 8000, y: 4500, state: 1 };
+  const obs2: any = { tick: 1, self, friends: [], enemies: [carrier], ghostsVisible: [] };
+  tasks = __buildTasks({ ...ctx, tick: 1 }, obs2, st, ctx.myBase, ctx.enemyBase);
+  assert.ok(!tasks.some(t => t.type === 'BLOCK'));
+  assert.ok(tasks.some(t => t.type === 'INTERCEPT' && t.payload?.enemyId === 2));
 });
 
 test('carrier can switch to higher-scoring task', () => {
