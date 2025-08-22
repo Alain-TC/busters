@@ -45,7 +45,7 @@ pnpm -C packages/sim-runner start train \
   --algo cem --pop 8 --gens 2 \
   --seeds-per 2 --eps-per-seed 1 \
   --jobs 1 --seed 42 \
-  --opp-pool greedy,random \
+   --opp-pool greedy,random,base-camper,aggressive-stunner \
   --hof 3
 ```
 
@@ -55,7 +55,7 @@ pnpm -C packages/sim-runner start train \
   --algo cem --pop 24 --gens 8 \
   --seeds-per 5 --eps-per-seed 2 \
   --jobs 8 --seed 42 \
-  --opp-pool greedy,random \
+   --opp-pool greedy,random,base-camper,aggressive-stunner \
   --hof 5
 ```
 
@@ -81,7 +81,7 @@ For long training runs, `scripts/train_long.sh` invokes the exporter automatical
 See the [EVOL2 milestones](docs/EVOL2.md#milestones-at-a-glance) for project progress.
 
 ## Run Local Tournaments
-Short names `greedy`, `random`, `evolved` are resolved by the loader to absolute file paths.
+Short names `greedy`, `random`, `base-camper`, `aggressive-stunner`, `evolved` are resolved by the loader to absolute file paths.
 
 ```bash
 pnpm -C packages/sim-runner start tourney \

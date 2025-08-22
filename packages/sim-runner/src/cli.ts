@@ -410,7 +410,7 @@ async function main() {
     const seedsPer = Number(getFlag(rest, 'seeds-per', 7));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
     const jobs = Number(getFlag(rest, 'jobs', 1)); // reserved
-    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,stunner,camper,hof'));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,camper,stunner,base-camper,aggressive-stunner,hof'));
     const subject = String(getFlag(rest, 'subject', '')).trim().toLowerCase();
     const pfsp = getBool(rest, 'pfsp', false);
     const pfspCount = Number(getFlag(rest, 'pfsp-count', 3));
@@ -451,7 +451,7 @@ async function main() {
     }
 
     console.log(`Unknown or empty --subject. Use: --subject hybrid`);
-    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random,hof`);
+    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,base-camper,aggressive-stunner,random,hof`);
     return;
   }
 
@@ -462,7 +462,7 @@ async function main() {
     const seedsPer = Number(getFlag(rest, 'seeds-per', 5));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
     const hofSize = Number(getFlag(rest, 'hof-size', 3));
-    const oppPoolArg = String(getFlag(rest, 'opp-pool', '@busters/agents/greedy,@busters/agents/random'));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', '@busters/agents/greedy,@busters/agents/random,@busters/agents/base-camper,@busters/agents/aggressive-stunner'));
     const jobs = Number(getFlag(rest, 'jobs', 1));
     const hofRefresh = Number(getFlag(rest, 'hof-refresh', 0));
     const rotateEvery = Number(getFlag(rest, 'rotate-opps', 0));
@@ -551,7 +551,7 @@ async function main() {
 
   console.log(`Usage:
   # Train Hybrid (CEM)
-  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,hof [--pfsp]
+  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,camper,stunner,base-camper,aggressive-stunner,hof [--pfsp]
 
   # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]
@@ -563,7 +563,7 @@ async function main() {
     [--out artifacts/tournament_standings.json]
 
   # CEM trainer with auto HOF refresh & opponent rotation
-  tsx src/cli.ts cem --gens 20 --pop 24 --opp-pool @busters/agents/greedy,@busters/agents/random \\
+  tsx src/cli.ts cem --gens 20 --pop 24 --opp-pool @busters/agents/greedy,@busters/agents/random,@busters/agents/base-camper,@busters/agents/aggressive-stunner \\
     [--hof-refresh 5] [--rotate-opps 5] [--telemetry artifacts/tag_telemetry.jsonl]
 `);
 }

@@ -8,3 +8,8 @@ test('resolveSpec maps hof tokens to champion paths', () => {
   const expected = path.resolve(process.cwd(), '../agents/hof/abc123.js');
   assert.equal(spec, expected);
 });
+
+test('resolveSpec handles new aliases', () => {
+  assert.equal(resolveSpec('base-camper'), '@busters/agents/base-camper');
+  assert.equal(resolveSpec('aggressive-stunner'), '@busters/agents/aggressive-stunner');
+});

@@ -9,6 +9,8 @@
     "./evolved": "./evolved-bot.js",
     "./camper": "./camper-stunner.js",
     "./stunner": "./aggro-chaser.js",
+    "./base-camper": "./base-camper.js",
+    "./aggressive-stunner": "./aggressive-stunner.js",
     "./hybrid": "./hybrid-bot.ts",
     "./hybrid-params": "./hybrid-params.ts",
     "./fog": "./fog.ts",

@@ -16,6 +16,8 @@ const ALIASES: Record<string, string> = {
   hybrid: "@busters/agents/hybrid",
   evolved: "@busters/agents/evolved", // if present in your repo
   hof: "@busters/agents/hof",          // <-- important one
+  "base-camper": "@busters/agents/base-camper",
+  "aggressive-stunner": "@busters/agents/aggressive-stunner",
 };
 
 function guessNameFromSpec(spec: string) {
