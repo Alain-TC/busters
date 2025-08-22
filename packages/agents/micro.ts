@@ -2,7 +2,8 @@
 /** No external deps; keep everything numerically cheap. */
 
 import { RULES } from "@busters/shared";
-import { performance } from "perf_hooks";
+
+const { performance } = globalThis;
 
 export const microPerf = { twoTurnMs: 0, twoTurnCalls: 0 };
 export const MICRO_BUDGET_MS = 0.5;
