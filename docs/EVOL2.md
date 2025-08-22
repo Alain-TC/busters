@@ -280,6 +280,16 @@ pnpm cg:export:champ
 ```
 Copy the resulting `agents/codingame-bot.js` into the CodinGame IDE to deploy.
 
+### Export Checklist
+
+1. Run the exporter (`pnpm cg:export:hybrid` or `pnpm cg:export:genome`).
+2. Smoke test the generated bot locally:
+   ```bash
+   node codingame_bot.js <<<'2 0 0\n0'
+   ```
+   It should immediately print one line per buster and exit when killed.
+3. Paste `agents/codingame-bot.js` into the CodinGame IDE.
+
 ## Testing, Evaluation & Robustness
 - Unit-test scoring, candidate generation, and micro-sim with synthetic states.
 - Deterministic seeds; CRN per matchup; regression tests on fixed episodes.
