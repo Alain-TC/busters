@@ -138,8 +138,8 @@ while (true) {
       continue;
     }
 
-    // Try STUN if off CD and enemy in range, skipping already stunned targets
-    if (cd <= 0 && enemies.length > 0) {
+    // Try STUN if off cooldown and enemy in range, skipping already stunned targets
+    if (cd === 0 && enemies.length > 0) {
       const ne = nearest(enemies, me.x, me.y);
       if (
         ne &&
