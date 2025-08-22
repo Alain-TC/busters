@@ -69,7 +69,7 @@ export class Fog {
     this.normalize();
   }
 
-  /** Clear vision circle (approx) by setting heat low & refresh visited in the disk */
+ /** Clear vision circle (approx) by setting heat low & refresh visited in the disk */
   clearCircle(p: Pt, r: number) {
     const gx0 = clamp(Math.floor((p.x - r) / CELL), 0, GX - 1);
     const gx1 = clamp(Math.floor((p.x + r) / CELL), 0, GX - 1);
@@ -89,6 +89,12 @@ export class Fog {
       }
     }
     this.normalize();
+  }
+
+  /** Probability/heat at a given point */
+  probAt(p: Pt): number {
+    const i = this.idxOf(p.x, p.y);
+    return this.heat[i];
   }
 
   /** Positive evidence: increase belief near a ghost sighting */

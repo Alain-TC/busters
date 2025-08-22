@@ -231,6 +231,9 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
       target = path[wp];
       payload.wp = wp;
     }
+    // bias toward high-probability / stale cells from fog
+    const prob = fog.probAt(target!);
+    baseScore += prob * 100;
     // Role bias: scouts favor exploring
     if (state.roleOf(mate.id) === "SCOUT") baseScore += 5;
     tasks.push({ type: "EXPLORE", target: target!, payload, baseScore });
@@ -395,6 +398,7 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
 export const __runAuction = runAuction;
 export const __scoreAssign = scoreAssign;
 export const __buildTasks = buildTasks;
+export const __fog = fog;
 
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks } from './hybrid-bot';
+import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -62,6 +62,24 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
   f.markVisited({ x: 8000, y: 4500 });
   const after = (f as any).heat[idx];
   assert.ok(after < before);
+});
+
+test('explore task score increases with fog heat', () => {
+  __fog.reset();
+  __fog.beginTick(10);
+  const ctx: any = { tick: 10, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 0, y: 0, state: 0 };
+  const obs: any = { tick: 10, self, friends: [], enemies: [], ghostsVisible: [] };
+  const st = new HybridState();
+  st.updateRoles([self]);
+  let tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  const t1 = tasks.find(t => t.type === 'EXPLORE' && t.payload?.id === 1)!;
+  const base1 = t1.baseScore;
+  __fog.bumpGhost(t1.target.x, t1.target.y);
+  tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  const t2 = tasks.find(t => t.type === 'EXPLORE' && t.payload?.id === 1)!;
+  const base2 = t2.baseScore;
+  assert.ok(base2 > base1);
 });
 
 test('runAuction aligns with Hungarian optimal assignment', () => {
