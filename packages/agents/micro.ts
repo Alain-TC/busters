@@ -77,6 +77,41 @@ export function contestedBustDelta(opts: {
   return delta;
 }
 
+/** Extra lookahead: simulate two alternating moves and re-evaluate bust/duel deltas. */
+export function twoTurnContestDelta(opts: {
+  me: Ent;
+  enemy: Ent;
+  ghost?: Pt & { id?: number };
+  bustMin: number;
+  bustMax: number;
+  stunRange: number;
+  canStunMe: boolean;
+  canStunEnemy: boolean;
+}) {
+  const { me, enemy, ghost, bustMin, bustMax, stunRange, canStunMe, canStunEnemy } = opts;
+  const me1 = step(me, ghost ?? enemy);
+  const enemy1 = step(enemy, ghost ?? me);
+  let delta = duelStunDelta({
+    me: me1,
+    enemy: enemy1,
+    canStunMe,
+    canStunEnemy,
+    stunRange,
+  });
+  if (ghost) {
+    delta += contestedBustDelta({
+      me: me1,
+      ghost,
+      enemies: [enemy1],
+      bustMin,
+      bustMax,
+      stunRange,
+      canStunMe,
+    });
+  }
+  return delta;
+}
+
 /** Value for blocking an enemy carrier before they can RELEASE near my base. */
 export function releaseBlockDelta(opts: {
   blocker: Ent; carrier: Ent; myBase: Pt; stunRange: number;
