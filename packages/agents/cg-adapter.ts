@@ -97,7 +97,9 @@ while (true) {
         break;
       case "EJECT":       // Some leagues support EJECT; if not, MOVE fallback is harmless
         if (typeof a.x === "number" && typeof a.y === "number") {
-          lines.push(`EJECT ${Math.round(a.x)} ${Math.round(a.y)}`);
+          const x = Math.max(0, Math.min(W, Math.round(a.x)));
+          const y = Math.max(0, Math.min(H, Math.round(a.y)));
+          lines.push(`EJECT ${x} ${y}`);
         } else {
           lines.push(`MOVE ${myBase.x} ${myBase.y}`);
         }

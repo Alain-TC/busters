@@ -107,3 +107,47 @@ test('bot does not stun an already stunned enemy', () => {
   action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 });
+
+test('eject when enemy closes and stun on cooldown', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  __mem.set(1, { stunReadyAt: 10, radarUsed: false, wp: 0 });
+  const obs: any = {
+    tick: 5,
+    self: { id: 1, x: 5000, y: 5000, state: 1, stunCd: 5 },
+    friends: [],
+    enemies: [{ id: 2, x: 5200, y: 5000, state: 0, range: 200 }],
+    ghostsVisible: []
+  };
+  const action = act(ctx, obs);
+  assert.equal(action.type, 'EJECT');
+});
+
+test('eject handoff to closer ally', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const obs: any = {
+    tick: 0,
+    self: { id: 1, x: 4000, y: 4000, state: 1 },
+    friends: [{ id: 3, x: 3600, y: 3600, state: 0 }],
+    enemies: [],
+    ghostsVisible: []
+  };
+  const action = act(ctx, obs);
+  assert.equal(action.type, 'EJECT');
+  assert.ok(Math.hypot(action.x - 3600, action.y - 3600) < 1e-6);
+});
+
+test('no eject if stun available', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const obs: any = {
+    tick: 0,
+    self: { id: 1, x: 5000, y: 5000, state: 1, stunCd: 0 },
+    friends: [],
+    enemies: [{ id: 2, x: 5200, y: 5000, state: 0, range: 200 }],
+    ghostsVisible: []
+  };
+  const action = act(ctx, obs);
+  assert.equal(action.type, 'MOVE');
+});

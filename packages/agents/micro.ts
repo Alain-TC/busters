@@ -109,6 +109,14 @@ export function releaseBlockDelta(opts: {
   return delta;
 }
 
+/** Heuristic value for dropping a carried ghost toward our base. */
+export function ejectDelta(opts: { me: Pt; target: Pt; myBase: Pt }) {
+  const { me, target, myBase } = opts;
+  const before = dist(me.x, me.y, myBase.x, myBase.y);
+  const after = dist(target.x, target.y, myBase.x, myBase.y);
+  return (before - after) * 0.001; // small reward if target closer to base
+}
+
 /** Simple additive scoring helper for candidate actions. */
 export type CandidateScore = { base: number; deltas?: number[] };
 export function scoreCandidate(c: CandidateScore): number {

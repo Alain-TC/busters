@@ -11,6 +11,7 @@ import {
   contestedBustDelta,
   releaseBlockDelta,
   scoreCandidate,
+  ejectDelta,
 } from "./micro";
 import { hungarian } from "./hungarian";
 
@@ -336,8 +337,17 @@ export function act(ctx: Ctx, obs: Obs) {
 
   /* ---------- High-priority instant actions ---------- */
 
-  // Release if at base
+  // Handle carrying: consider EJECT or returning home
   if (carrying) {
+    const enemyClose = enemies.some(e => dist(me.x, me.y, e.x, e.y) <= 2200);
+    const betterAlly = friends.find(f => f.id !== me.id && dist(me.x, me.y, f.x, f.y) <= 1760 && dist(f.x, f.y, MY.x, MY.y) + 400 < dist(me.x, me.y, MY.x, MY.y));
+    if ((!canStun && enemyClose) || betterAlly) {
+      const target = betterAlly ? { x: betterAlly.x, y: betterAlly.y } : (() => {
+        const dir = norm(MY.x - me.x, MY.y - me.y);
+        return { x: clamp(me.x + dir.x * 800, 0, W), y: clamp(me.y + dir.y * 800, 0, H) };
+      })();
+      return dbg({ type: "EJECT", x: target.x, y: target.y }, "EJECT", betterAlly ? "handoff" : "threat");
+    }
     const dHome = dist(me.x, me.y, MY.x, MY.y);
     if (dHome <= TUNE.RELEASE_DIST) {
       return dbg({ type: "RELEASE" }, "RELEASE", "at_base");
@@ -507,6 +517,12 @@ export function act(ctx: Ctx, obs: Obs) {
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: "EXPLORE_WP", reason: `wp_${Mx.wp}` });
       }
+    }
+
+    if (carrying) {
+      const home = spacedTarget(me, MY, friends);
+      const delta = ejectDelta({ me, target: home, myBase: MY });
+      candidates.push({ act: { type: "EJECT", x: home.x, y: home.y }, base: 90, deltas: [delta], tag: "EJECT_FOLLOW", reason: "carry" });
     }
 
     if (candidates.length) {
