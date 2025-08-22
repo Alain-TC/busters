@@ -78,9 +78,11 @@ test('runAuction aligns with Hungarian optimal assignment', () => {
   const MY = { x: 0, y: 0 };
   const tick = 0;
 
-  const cost = team.map(b => tasks.map(t => -__scoreAssign(b as any, t as any, enemies, MY, tick)));
+  const st = new HybridState();
+  st.updateRoles(team as any);
+  const cost = team.map(b => tasks.map(t => -__scoreAssign(b as any, t as any, enemies, MY, tick, st)));
   const expected = hungarian(cost);
-  const assigned = __runAuction(team as any, tasks as any, enemies, MY, tick);
+  const assigned = __runAuction(team as any, tasks as any, enemies, MY, tick, st);
   for (let i = 0; i < team.length; i++) {
     const tIdx = expected[i];
     if (tIdx >= 0) {

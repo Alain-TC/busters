@@ -7,6 +7,8 @@
 
 export type Pt = { x: number; y: number };
 
+export type Role = "SCOUT" | "CHASER" | "CARRIER" | "INTERCEPT" | "BLOCK";
+
 const MAP_W = 16000, MAP_H = 9000; // safe defaults
 // How long to remember enemies (in ticks) before dropping them
 export const DEFAULT_ENEMY_MAX_AGE = 40;
@@ -38,6 +40,9 @@ export class HybridState {
   // Enemy last-seen
   enemies = new Map<number, EnemySeen>();
   enemyMaxAge: number;
+
+  // Per-buster role tracking
+  roles = new Map<number, Role>();
 
   constructor(
     bounds?: { w?: number; h?: number },
@@ -207,6 +212,23 @@ export class HybridState {
       });
     }
     if (tick !== undefined) this.pruneEnemies(tick);
+  }
+
+  /** Assign or update roles for our busters */
+  updateRoles(allies: Array<{ id: number; carrying?: any }> = []) {
+    if (!allies.length) return;
+    // Choose lowest id as persistent scout
+    const scoutId = allies.map(a => a.id).sort((a, b) => a - b)[0];
+    for (const a of allies) {
+      let role: Role = "CHASER";
+      if (a.carrying !== undefined) role = "CARRIER";
+      else if (a.id === scoutId) role = "SCOUT";
+      this.roles.set(a.id, role);
+    }
+  }
+
+  roleOf(id: number): Role {
+    return this.roles.get(id) ?? "CHASER";
   }
 }
 

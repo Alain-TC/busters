@@ -215,6 +215,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
       target = path[wp];
       payload.wp = wp;
     }
+    // Role bias: scouts favor exploring
+    if (state.roleOf(mate.id) === "SCOUT") baseScore += 5;
     tasks.push({ type: "EXPLORE", target: target!, payload, baseScore });
   }
 
@@ -227,7 +229,7 @@ export const __pMem = pMem; // exposed for tests
 function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
-function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): number {
+function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, state: HybridState): number {
   const baseD = dist(b.x, b.y, t.target.x, t.target.y);
   let s = t.baseScore - baseD * WEIGHTS.DIST_PEN;
   const canStunMe = M(b.id).stunReadyAt <= tick;
@@ -314,17 +316,24 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
     const near = enemies.filter(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS).length;
     s += near * 1.5;
   }
+
+  // Role biases
+  const role = state.roleOf(b.id);
+  if (role === "SCOUT" && t.type === "EXPLORE") s += 5;
+  if (role === "CHASER" && t.type === "BUST") s += 5;
+  if (role === "INTERCEPT" && t.type === "INTERCEPT") s += 5;
+  if (role === "BLOCK" && t.type === "BLOCK") s += 5;
   return s;
 }
 
 /** Auction/assignment: use Hungarian for optimal matching when manageable */
-function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number): Map<number, Task> {
+function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number, state: HybridState): Map<number, Task> {
   const assigned = new Map<number, Task>();
 
   // Use Hungarian when both team and task sizes are reasonable
   if (team.length && tasks.length && team.length * tasks.length <= 100) {
     const cost = team.map(b =>
-      tasks.map(t => -scoreAssign(b, t, enemies, MY, tick))
+      tasks.map(t => -scoreAssign(b, t, enemies, MY, tick, state))
     );
     const match = hungarian(cost);
     for (let i = 0; i < team.length; i++) {
@@ -342,7 +351,7 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
   const S: { b: number; t: number; s: number }[] = [];
   for (let bi = 0; bi < team.length; bi++) {
     for (let ti = 0; ti < tasks.length; ti++) {
-      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick) });
+      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick, state) });
     }
   }
   S.sort((a, b) => b.s - a.s);
@@ -382,6 +391,7 @@ export function act(ctx: Ctx, obs: Obs) {
   fog.beginTick(tick);
   const friends = uniqTeam(me, obs.friends);
   for (const f of friends) { fog.markVisited(f); state.touchVisit(f); state.subtractSeen(f, 400); }
+  state.updateRoles(friends);
 
   const { my: MY, enemy: EN } = resolveBases(ctx);
   const enemiesObs = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
@@ -458,7 +468,7 @@ export function act(ctx: Ctx, obs: Obs) {
   if (planTick !== tick) {
     const team = friends; // includes self
     const tasks = buildTasks(ctx, obs, state, MY, EN);
-    planAssign = runAuction(team, tasks, enemiesAll, MY, tick);
+    planAssign = runAuction(team, tasks, enemiesAll, MY, tick, state);
     planTick = tick;
   }
 
