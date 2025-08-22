@@ -33,7 +33,7 @@ test('trainCemWeights moves mean toward target', async () => {
     pop: 32,
     elitePct: 0.25,
     seed: 123,
-    oppPool: ['greedy', 'random'],
+    oppPool: ['greedy', 'random', 'base-camper', 'aggressive-stunner'],
     evaluate: evalFn,
     artifactsDir: tmpDir,
   });

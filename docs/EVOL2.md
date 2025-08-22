@@ -237,7 +237,7 @@ The `sim-runner` package drives evolutionary training and evaluation.
 pnpm -C packages/sim-runner start train \
   --algo cem --pop 24 --gens 12 \
   --seeds-per 7 --seed 42 \
-  --opp-pool greedy,random,hof --hof 6
+  --opp-pool greedy,random,stunner,camper,defender,scout,base-camper,aggressive-stunner,hof --hof 6
 # optional flags:
 #   --hof-refresh 5      refresh HOF every 5 generations
 #   --elo-out custom/path/elo.json  write Elo ratings here after each gen
@@ -252,14 +252,14 @@ Outputs are written to `packages/sim-runner/artifacts/`:
 pnpm -C packages/sim-runner start train \
   --algo cma --pop 32 --gens 20 \
   --seeds-per 7 --eps-per-seed 2 \
-  --opp-pool greedy,random,camper,stunner,defender,scout,hof --hof 8 --seed 42
+  --opp-pool greedy,random,camper,stunner,defender,scout,base-camper,aggressive-stunner,hof --hof 8 --seed 42
 ```
 
 ### Sample CMA-ES Run
 ```
 pnpm -C packages/sim-runner start train --subject hybrid --algo cma \
   --pop 4 --gens 2 --seeds-per 1 --eps-per-seed 1 \
-  --opp-pool greedy,random,camper,stunner,defender,scout --seed 42
+  --opp-pool greedy,random,camper,stunner,defender,scout,base-camper,aggressive-stunner --seed 42
 ```
 This quick run yielded a best fitness of 37.25 (≈37.5% win rate) and produced the
 parameters committed in `packages/agents/hybrid-params.ts`.

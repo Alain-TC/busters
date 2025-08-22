@@ -45,7 +45,7 @@ pnpm -C packages/sim-runner start train \
   --algo cem --pop 8 --gens 2 \
   --seeds-per 2 --eps-per-seed 1 \
   --jobs 1 --seed 42 \
-  --opp-pool greedy,random \
+    --opp-pool greedy,random,stunner,camper,defender,scout,base-camper,aggressive-stunner \
   --hof 3
 # optional:
 #   --hof-refresh 5      # refresh HOF every 5 generations
@@ -58,7 +58,7 @@ pnpm -C packages/sim-runner start train \
   --algo cem --pop 24 --gens 8 \
   --seeds-per 5 --eps-per-seed 2 \
   --jobs 8 --seed 42 \
-  --opp-pool greedy,random \
+    --opp-pool greedy,random,stunner,camper,defender,scout,base-camper,aggressive-stunner \
   --hof 5
 # optional flags as above
 ```
