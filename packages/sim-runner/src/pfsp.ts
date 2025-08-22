@@ -1,41 +1,7 @@
 // packages/sim-runner/src/pfsp.ts
-import fs from "fs";
-import path from "path";
+import { EloTable, getElo, expectedScore, loadEloTable } from "./elo";
 
-export type EloTable = Record<string, number>;
 export type Opponent = { id: string; act?: Function };
-
-// ---- Tiny local Elo helpers (decoupled from ./elo.ts) ----
-const DEFAULT_ELO = 1000;
-const ELO_PATH = process.env.ELO_PATH || path.resolve("artifacts", "elo.json");
-
-function loadEloTable(): EloTable {
-  try {
-    const p = ELO_PATH;
-    if (fs.existsSync(p)) {
-      const raw = JSON.parse(fs.readFileSync(p, "utf-8"));
-      const out: EloTable = {};
-      for (const [k, v] of Object.entries(raw || {})) {
-        const n = Number(v);
-        if (Number.isFinite(n)) out[k] = n;
-      }
-      return out;
-    }
-  } catch {}
-  return {};
-}
-
-function getElo(elo: EloTable, id: string): number {
-  const v = elo[id];
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  // lazily default & remember so stability is consistent
-  return (elo[id] = DEFAULT_ELO);
-}
-
-// Elo expected score (A vs B)
-function expectedScore(rA: number, rB: number) {
-  return 1 / (1 + Math.pow(10, (rB - rA) / 400));
-}
 
 /**
  * PFSP selection using Elo:
