@@ -38,7 +38,9 @@ const W = 16000, H = 9000;
 const BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
-const EJECT_MAX = 1760;
+export const EJECT_RADIUS = 1760;
+export const ENEMY_NEAR_RADIUS = 2200;
+export const STUN_CHECK_RADIUS = 2500;
 const PREDICT_TICKS = 3;
 
 /** Attach debug metadata to an action */
@@ -174,12 +176,12 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   for (const g of ghosts) {
     const r = g.range ?? dist(meObs.self.x, meObs.self.y, g.x, g.y);
     const onRingBonus = (r >= BUST_MIN && r <= BUST_MAX) ? WEIGHTS.BUST_RING_BONUS : 0;
-    const risk = (enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
+    const risk = (enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= ENEMY_NEAR_RADIUS).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
     tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
 
     // SUPPORT contested busts
     const alliesNear = team.filter(f => dist(f.x, f.y, g.x, g.y) <= BUST_MAX);
-    const enemiesNear = enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200);
+    const enemiesNear = enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= ENEMY_NEAR_RADIUS);
     if (alliesNear.length && enemiesNear.length) {
       tasks.push({
         type: "SUPPORT",
@@ -209,7 +211,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     const isCarrying = mate.carrying !== undefined || mate.state === 1;
     if (!isCarrying) continue;
     const mid = { x: Math.round((mate.x + MY.x) / 2), y: Math.round((mate.y + MY.y) / 2) };
-    const near = enemies.filter(e => dist(e.x, e.y, mid.x, mid.y) <= 2200).length;
+    const near = enemies.filter(e => dist(e.x, e.y, mid.x, mid.y) <= ENEMY_NEAR_RADIUS).length;
     const baseScore = WEIGHTS.CARRY_BASE - near * WEIGHTS.CARRY_ENEMY_NEAR_PEN;
     tasks.push({ type: "CARRY", target: mid, payload: { id: mate.id }, baseScore });
   }
@@ -269,7 +271,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
       s += micro(() => duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE }));
       s += micro(() => interceptDelta({ me: b, enemy, myBase: MY }));
       s += micro(() => releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE }));
-      const near = (enemy.range ?? dist(b.x, b.y, enemy.x, enemy.y)) <= 2500;
+      const near = (enemy.range ?? dist(b.x, b.y, enemy.x, enemy.y)) <= STUN_CHECK_RADIUS;
       const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
       if (near || threat) {
         s += micro(() =>
@@ -302,7 +304,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
         canStunMe,
       })
     );
-    const close = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2500);
+    const close = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= STUN_CHECK_RADIUS);
     for (const e of close) {
       if (microOverBudget()) break;
       s += micro(() =>
@@ -321,7 +323,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
   }
 
   if (t.type === "SUPPORT") {
-    const enemiesNear = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2200).length;
+    const enemiesNear = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= ENEMY_NEAR_RADIUS).length;
     const allies = (t.payload?.allyIds?.length ?? 0);
     s += (enemiesNear - allies) * (WEIGHTS.DEFEND_NEAR_BONUS * 0.5);
     if (canStunMe) s += WEIGHTS.DEFEND_NEAR_BONUS;
@@ -329,7 +331,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
 
   if (t.type === "CARRY") {
     const homeD = dist(b.x, b.y, MY.x, MY.y);
-    const midRisk = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2200).length;
+    const midRisk = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= ENEMY_NEAR_RADIUS).length;
     s -= (homeD - baseD) * WEIGHTS.DIST_PEN; // total penalty is dist to base
     s -= midRisk * WEIGHTS.CARRY_ENEMY_NEAR_PEN;
     if (t.payload?.id === b.id) s += 2; // slight bias for original carrier
@@ -455,7 +457,7 @@ export function act(ctx: Ctx, obs: Obs) {
   const enemiesAll = Array.from(enemyMap.values()).sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
   const enemies = enemiesObs;
 
-  if (enemies.length || ghosts.length) { fog.clearCircle(me, 2200); state.subtractSeen(me, 2200); }
+  if (enemies.length || ghosts.length) { fog.clearCircle(me, ENEMY_NEAR_RADIUS); state.subtractSeen(me, ENEMY_NEAR_RADIUS); }
   for (const g of ghosts) { fog.bumpGhost(g.x, g.y); }
   if (ghosts.length) state.updateGhosts(ghosts.map(g => ({ x: g.x, y: g.y }))); 
 
@@ -478,15 +480,15 @@ export function act(ctx: Ctx, obs: Obs) {
       let handoff: Ent | undefined;
       for (const f of friends) {
         if (f.id === me.id) continue;
-        if (dist(f.x, f.y, me.x, me.y) <= EJECT_MAX && dist(f.x, f.y, MY.x, MY.y) + 400 < dHome) {
+        if (dist(f.x, f.y, me.x, me.y) <= EJECT_RADIUS && dist(f.x, f.y, MY.x, MY.y) + 400 < dHome) {
           handoff = f; break;
         }
       }
       if ((!canStun && threat) || handoff) {
         const target = handoff ?? MY;
         const [dx, dy] = norm(target.x - me.x, target.y - me.y);
-        const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
-        const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
+        const tx = clamp(me.x + dx * EJECT_RADIUS, 0, W);
+        const ty = clamp(me.y + dy * EJECT_RADIUS, 0, H);
         return finish(dbg({ type: "EJECT", x: tx, y: ty }, "EJECT", handoff ? "handoff" : "threat"));
       }
     }
@@ -554,8 +556,8 @@ export function act(ctx: Ctx, obs: Obs) {
       const ally = friends.filter(f => f.id !== me.id).sort((a,b)=> dist(a.x,a.y,MY.x,MY.y) - dist(b.x,b.y,MY.x,MY.y))[0];
       const target = ally ?? MY;
       const [dx, dy] = norm(target.x - me.x, target.y - me.y);
-      const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
-      const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
+      const tx = clamp(me.x + dx * EJECT_RADIUS, 0, W);
+      const ty = clamp(me.y + dy * EJECT_RADIUS, 0, H);
       const enemy = enemiesAll[0];
       const deltas: number[] = [];
       deltas.push(micro(() => ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })));
@@ -595,7 +597,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
         const P = spacedTarget(me, { x: px, y: py }, friends);
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
-        const close = enemiesAll.filter(e => dist(e.x, e.y, P.x, P.y) <= 2500);
+        const close = enemiesAll.filter(e => dist(e.x, e.y, P.x, P.y) <= STUN_CHECK_RADIUS);
         const deltas: number[] = [];
         for (const e of close) {
           if (microOverBudget()) break;
@@ -650,7 +652,7 @@ export function act(ctx: Ctx, obs: Obs) {
                 canStunMe: canStun,
               })
             );
-            const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
+            const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= STUN_CHECK_RADIUS);
             let extra = 0;
             for (const e of close) {
               if (microOverBudget()) break;
@@ -692,7 +694,7 @@ export function act(ctx: Ctx, obs: Obs) {
             canStunMe: canStun,
           })
         );
-        const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
+        const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= STUN_CHECK_RADIUS);
         let extra = 0;
         for (const e of close) {
           if (microOverBudget()) break;
@@ -729,7 +731,7 @@ export function act(ctx: Ctx, obs: Obs) {
           deltas.push(
             micro(() => releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE }))
           );
-          const near = (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= 2500;
+          const near = (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= STUN_CHECK_RADIUS;
           const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
           if (near || threat) {
             deltas.push(

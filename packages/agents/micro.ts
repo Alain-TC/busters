@@ -35,6 +35,7 @@ const twoTurnInterceptCache = new Map<string, number>();
 const twoTurnEjectCache = new Map<string, number>();
 
 const SPEED = RULES.MOVE_SPEED; // buster speed per turn
+const ENEMY_NEAR_RADIUS = RULES.VISION;
 
 type Pt = { x: number; y: number };
 type Ent = { id: number; x: number; y: number; state?: number; range?: number };
@@ -97,7 +98,7 @@ export function contestedBustDelta(opts: {
   const me1 = step(me, ghost);
   const enemies1 = enemies.map(e => step(e, ghost));
   const r = dist(me1.x, me1.y, ghost.x, ghost.y);
-  const near = enemies1.filter(e => dist(e.x, e.y, ghost.x, ghost.y) <= 2200);
+  const near = enemies1.filter(e => dist(e.x, e.y, ghost.x, ghost.y) <= ENEMY_NEAR_RADIUS);
   if (near.length === 0) return (r >= bustMin && r <= bustMax) ? +0.25 : 0;
 
   let delta = 0;
