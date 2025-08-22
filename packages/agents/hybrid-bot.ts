@@ -4,7 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
-import { HybridState, getState } from "./lib/state";
+import { HybridState, getState, predictEnemyPath } from "./lib/state";
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -29,6 +29,7 @@ const W = 16000, H = 9000;
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
 const EJECT_MAX = 1760;
+const PREDICT_TICKS = 3;
 
 /** Attach debug metadata to an action */
 function dbg<T extends Record<string, any>>(act: T, tag: string, reason?: string, extra?: any) {
@@ -134,9 +135,12 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   // INTERCEPT last-seen carriers
   for (const e of state.enemies.values()) {
     if (e.carrying && !enemies.some(v => v.id === e.id)) {
-      const tx = Math.round((e.last.x + MY.x) / 2);
-      const ty = Math.round((e.last.y + MY.y) / 2);
-      tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
+      const path = predictEnemyPath(e, MY, PREDICT_TICKS);
+      for (const p of path) {
+        const tx = Math.round((p.x + MY.x) / 2);
+        const ty = Math.round((p.y + MY.y) / 2);
+        tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
+      }
     }
   }
 

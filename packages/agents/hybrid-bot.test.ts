@@ -176,3 +176,17 @@ test('carrier can switch to higher-scoring task', () => {
   const myTask = assigned.get(1)!;
   assert.equal(myTask.type, 'DEFEND');
 });
+
+test('buildTasks uses predicted path for unseen carriers', () => {
+  const ctx: any = { tick: 3, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 0, y: 0, state: 0 };
+  const obs: any = { tick: 3, self, friends: [], enemies: [], ghostsVisible: [] };
+  const st = new HybridState();
+  st.trackEnemies([{ id: 2, x: 2600, y: 1000, carrying: 1 }], 1);
+  st.trackEnemies([{ id: 2, x: 1800, y: 1000, carrying: 1 }], 2);
+  st.updateRoles([self]);
+  const tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
+  const intercepts = tasks.filter(t => t.type === 'INTERCEPT' && t.payload?.enemyId === 2);
+  assert.ok(intercepts.some(t => t.target.x === 500 && t.target.y === 500));
+  assert.ok(intercepts.length >= 2);
+});
