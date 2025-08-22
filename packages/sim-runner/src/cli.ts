@@ -16,6 +16,7 @@ import {
 } from './subjects';
 
 import { selectOpponentsPFSP } from './pfsp';
+import { loadEloTable, saveEloTable, updateElo } from './elo';
 
 /* --------------------- CLI helpers --------------------- */
 function getFlag(args: string[], name: string, def?: any) {
@@ -329,6 +330,69 @@ async function trainHybridCMA(cfg: CmaCfg) {
   return best;
 }
 
+/* ---------------- Post-train utilities ---------------- */
+function writeHybridParams(tw: { TUNE: any; WEIGHTS: any }) {
+  const out = path.resolve('packages/agents/hybrid-params.ts');
+  const content = `// packages/agents/hybrid-params.ts\n` +
+    `// -----------------------------------------------------------------------------\n` +
+    `// Hybrid parameters (auto-updated).\n` +
+    `// -----------------------------------------------------------------------------\n\n` +
+    `export type Tune = {\n` +
+    `  RELEASE_DIST: number;\n  STUN_RANGE: number;\n  RADAR1_TURN: number;\n  RADAR2_TURN: number;\n` +
+    `  SPACING: number;\n  SPACING_PUSH: number;\n  BLOCK_RING: number;\n  DEFEND_RADIUS: number;\n` +
+    `  EXPLORE_STEP_REWARD: number;\n};\n\n` +
+    `export type Weights = {\n` +
+    `  BUST_BASE: number;\n  BUST_RING_BONUS: number;\n  BUST_ENEMY_NEAR_PEN: number;\n  INTERCEPT_BASE: number;\n` +
+    `  INTERCEPT_DIST_PEN: number;\n  DEFEND_BASE: number;\n  DEFEND_NEAR_BONUS: number;\n  BLOCK_BASE: number;\n` +
+    `  EXPLORE_BASE: number;\n  SUPPORT_BASE: number;\n  DIST_PEN: number;\n  CARRY_BASE: number;\n` +
+    `  CARRY_ENEMY_NEAR_PEN: number;\n};\n\n` +
+    `export const TUNE: Tune = ${JSON.stringify(tw.TUNE, null, 2)} as Tune;\n\n` +
+    `export const WEIGHTS: Weights = ${JSON.stringify(tw.WEIGHTS, null, 2)} as Weights;\n\n` +
+    `const HYBRID_PARAMS = { TUNE, WEIGHTS };\nexport default HYBRID_PARAMS;\n`;
+  fs.writeFileSync(out, content);
+  console.log(`Wrote -> ${out}`);
+}
+
+async function pfspEvalAndRefreshHOF(args: { tw: any; oppNames: string[]; seedsPer: number; episodesPerSeed: number; pfspCount: number; }) {
+  const { tw, oppNames, seedsPer, episodesPerSeed, pfspCount } = args;
+  const candNames = Array.from(new Set([...oppNames, 'hof']));
+  const eloPath = path.resolve('packages/sim-runner/artifacts/elo.json');
+  const championPath = path.resolve('packages/agents/champion-bot.js');
+  const elo = loadEloTable(eloPath);
+
+  const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo }).map(p => p.id);
+  const opps = await resolveOppPool(picks);
+  const botA = makeHybridBotFromTW(tw);
+
+  for (const opp of opps) {
+    let scoreA = 0, scoreB = 0;
+    for (let si = 0; si < seedsPer; si++) {
+      const res = await runEpisodes({
+        seed: 100 + si * 1013,
+        episodes: episodesPerSeed,
+        bustersPerPlayer: 3,
+        ghostCount: 12,
+        botA,
+        botB: opp.bot,
+      });
+      scoreA += res.scoreA;
+      scoreB += res.scoreB;
+    }
+    const diff = scoreA - scoreB;
+    const resultA = diff > 0 ? 1 : diff < 0 ? 0 : 0.5;
+    updateElo(elo, 'hybrid', opp.name, resultA);
+  }
+
+  saveEloTable(elo, eloPath);
+
+  const hybridElo = elo['hybrid'] || 1000;
+  const hofElo = elo['hof'] || 1000;
+  const champSpec = hybridElo >= hofElo ? './hybrid-bot.ts' : '@busters/agents/hof';
+  const js = `import champ from '${champSpec}';\nexport const meta = champ.meta;\nexport const act = champ.act;\nexport default { meta, act };\n`;
+  fs.writeFileSync(championPath, js);
+  console.log(`Refreshed Elo & HOF -> ${championPath}`);
+}
+
 /* ---------------- Tag helpers for SIM replays ---------------- */
 function countTags(actions: any[]): Record<string, number> {
   const c: Record<string, number> = {};
@@ -423,7 +487,7 @@ async function main() {
       const artDir = path.resolve('packages/sim-runner/artifacts');
 
       if (algo === 'cma') {
-        await trainHybridCMA({
+        const best = await trainHybridCMA({
           pop, gens,
           seedsPer, episodesPerSeed,
           seed,
@@ -432,11 +496,13 @@ async function main() {
           pfsp, pfspCount,
           logBest,
         });
+        writeHybridParams(best.tw);
+        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount });
         return;
       }
 
       if (algo === 'cem') {
-        await trainHybridCEM({
+        const best = await trainHybridCEM({
           pop, gens, elitePct: 0.2,
           seedsPer, episodesPerSeed,
           seed, jobs,
@@ -445,6 +511,8 @@ async function main() {
           pfsp, pfspCount,
           logBest,
         });
+        writeHybridParams(best.tw);
+        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount });
         return;
       }
 
