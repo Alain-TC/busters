@@ -3,6 +3,9 @@
  * otherwise falls back to the tuned Hybrid.
  */
 
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import * as Hybrid from "./hybrid-bot";
 
 type Bot = { meta: any; act: (ctx: any, obs: any) => any };
@@ -14,28 +17,35 @@ function normalize(mod: any): Bot {
   return { meta, act };
 }
 
-// Start with Hybrid as the safe fallback
-let chosen: Bot = normalize(Hybrid);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const cand: Bot[] = [];
 
 try {
-  // If you previously exported a champion with --export-champ, prefer it
-  const mod = await import("./champion-bot.js");
-  const champ = normalize(mod);
-  if (typeof champ.act === "function") chosen = champ;
+  const files = fs.readdirSync(__dirname)
+    .filter(f => f.startsWith("champion-bot") && f.endsWith(".js"));
+  for (const f of files) {
+    try {
+      const mod = await import(`./${f}?v=${Date.now()}${Math.random()}`);
+      cand.push(normalize(mod));
+    } catch {
+      // ignore broken snapshot
+    }
+  }
 } catch {
-  // No champion present; keep Hybrid
+  // ignore fs errors
 }
 
-// Re-export in both styles (named + default) so any loader is happy
+if (!cand.length) cand.push(normalize(Hybrid));
+let chosen: Bot = cand[Math.floor(Math.random() * cand.length)];
+
+export const candidates = cand;
+export function random() {
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 export const meta = { name: `HOF(${chosen.meta?.name ?? "?"})`, ...chosen.meta };
 export function act(ctx: any, obs: any) {
   return chosen.act(ctx, obs);
 }
 export default { meta, act };
-
-// Optional: list for future multi-snapshot HOF logic
-export const candidates = [{ meta, act }];
-export function random() {
-  return candidates[0];
-}
 

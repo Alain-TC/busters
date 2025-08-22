@@ -150,6 +150,8 @@ type CEMOpts = {
   hofRefreshInterval?: number;
   /** rotate opponent pool every N generations */
   oppRotateInterval?: number;
+  /** inject latest champion bot every N generations */
+  championRefreshInterval?: number;
   /** path for per-tag telemetry log */
   telemetryPath?: string;
   /** path to persist Elo ratings */
@@ -478,6 +480,7 @@ export async function trainCEM(opts: CEMOpts) {
   const emaAlpha = 0.6;
 
   let nextHofRefresh = 0;
+  let nextChampionInject = opts.championRefreshInterval ?? 0;
   for (let gen = 0; gen < opts.gens; gen++) {
     if (opts.hofRefreshInterval && gen >= nextHofRefresh) {
       refreshHallOfFame(opts.artifactsDir);
@@ -515,6 +518,17 @@ export async function trainCEM(opts: CEMOpts) {
       fs.writeFileSync(path.join(artDir, 'simrunner_best_genome.json'), JSON.stringify(bestEver, null, 2));
     }
 
+    if (bestEver) {
+      const champDir = path.resolve(process.cwd(), '../../agents');
+      try {
+        fs.mkdirSync(champDir, { recursive: true });
+        const champPath = path.join(champDir, 'champion-bot.js');
+        compileGenomeToJS(path.join(artDir, 'simrunner_best_genome.json'), champPath);
+        const snapPath = path.join(champDir, `champion-bot.gen${gen}.js`);
+        fs.copyFileSync(champPath, snapPath);
+      } catch {}
+    }
+
     HOF.push(genBest);
     while (HOF.length > opts.hofSize) HOF.shift();
 
@@ -534,6 +548,13 @@ export async function trainCEM(opts: CEMOpts) {
     logTelemetry(opts, pfspStats, elo, gen);
     if (opts.oppRotateInterval && (gen + 1) % opts.oppRotateInterval === 0) {
       rotateOpponentPool(opts, elo, pfspStats, basePoolSize);
+    }
+    if (opts.championRefreshInterval && gen + 1 >= nextChampionInject) {
+      const spec = `@busters/agents/hof?gen=${gen + 1}`;
+      opts.oppPool = opts.oppPool.filter(o => !(o.id && String(o.id).startsWith('@busters/agents/hof')));
+      opts.oppPool.push({ id: spec });
+      console.log(`Injected champion into opponent pool (${spec}).`);
+      nextChampionInject += opts.championRefreshInterval;
     }
     saveElo(eloFile, elo);
     for (const k in pfspStats) delete pfspStats[k];
