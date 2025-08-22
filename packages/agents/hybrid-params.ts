@@ -6,31 +6,31 @@
 // -----------------------------------------------------------------------------
 
 export type Tune = {
-  RELEASE_DIST: number;       // release when dHome < min(RELEASE_DIST, BASE_SCORE_RADIUS)
-  STUN_RANGE: number;         // max range to STUN
-  RADAR1_TURN: number;        // first scheduled RADAR (buster localIdx 0)
-  RADAR2_TURN: number;        // second scheduled RADAR (buster localIdx 1)
-  SPACING: number;            // min friend separation before nudging
-  SPACING_PUSH: number;       // push amount when too close to a friend
-  BLOCK_RING: number;         // distance from enemy base center for blocker
-  DEFEND_RADIUS: number;      // radius around our base that triggers DEFEND
-  EXPLORE_STEP_REWARD: number;// tiny bias to avoid idling while exploring
+  RELEASE_DIST: number;       // release when dHome < min(RELEASE_DIST, BASE_SCORE_RADIUS); 1500–2000 units
+  STUN_RANGE: number;         // max range to STUN in game units; typically 1750–2000
+  RADAR1_TURN: number;        // first scheduled RADAR (buster localIdx 0); usually turn 1–10
+  RADAR2_TURN: number;        // second scheduled RADAR (buster localIdx 1); usually turn 30–80
+  SPACING: number;            // min friend separation before nudging; 700–1000 units
+  SPACING_PUSH: number;       // push amount when too close to a friend; 200–400 units
+  BLOCK_RING: number;         // distance from enemy base center for blocker; ~1500–2000 units
+  DEFEND_RADIUS: number;      // radius around our base that triggers DEFEND; 3000–4000 units
+  EXPLORE_STEP_REWARD: number;// tiny bias to avoid idling while exploring; 0.9–1.0 scalar
 };
 
 export type Weights = {
-  BUST_BASE: number;            // base utility for bust tasks
-  BUST_RING_BONUS: number;      // bonus if on the 900–1760 ring
-  BUST_ENEMY_NEAR_PEN: number;  // penalty per enemy near a ghost
-  INTERCEPT_BASE: number;       // base utility for intercept tasks
-  INTERCEPT_DIST_PEN: number;   // extra distance penalty for intercept
-  DEFEND_BASE: number;          // base utility for defend tasks
-  DEFEND_NEAR_BONUS: number;    // extra bonus if threat near base
-  BLOCK_BASE: number;           // base utility for blocker tasks
-  EXPLORE_BASE: number;         // base utility for explore tasks
-  SUPPORT_BASE: number;         // base utility for support tasks
-  DIST_PEN: number;             // generic distance penalty
-  CARRY_BASE: number;           // base utility for carry tasks
-  CARRY_ENEMY_NEAR_PEN: number; // penalty per enemy near carrier path
+  BUST_BASE: number;            // base utility for bust tasks; ~5–20 points
+  BUST_RING_BONUS: number;      // bonus if on the 900–1760 ring; ~5–10 points
+  BUST_ENEMY_NEAR_PEN: number;  // penalty per enemy near a ghost; ~2–8 points
+  INTERCEPT_BASE: number;       // base utility for intercept tasks; ~10–20 points
+  INTERCEPT_DIST_PEN: number;   // extra distance penalty for intercept; ~0.005–0.01 per unit
+  DEFEND_BASE: number;          // base utility for defend tasks; ~8–15 points
+  DEFEND_NEAR_BONUS: number;    // extra bonus if threat near base; ~4–8 points
+  BLOCK_BASE: number;           // base utility for blocker tasks; ~5–8 points
+  EXPLORE_BASE: number;         // base utility for explore tasks; ~3–6 points
+  SUPPORT_BASE: number;         // base utility for support tasks; ~5–10 points
+  DIST_PEN: number;             // generic distance penalty; ~0.001–0.003 per unit
+  CARRY_BASE: number;           // base utility for carry tasks; ~10–20 points
+  CARRY_ENEMY_NEAR_PEN: number; // penalty per enemy near carrier path; ~3–6 points
 };
 
 // -----------------------------------------------------------------------------
