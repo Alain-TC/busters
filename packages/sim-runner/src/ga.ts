@@ -47,12 +47,14 @@ export type Genome = {
 const DEFAULT_MODULE = '@busters/agents/greedy';
 
 // map CLI --opp-pool names to module specs
-const NAME_TO_SPEC: Record<string, string> = {
-  greedy: '@busters/agents/greedy',
-  random: '@busters/agents/random',
-  camper: '@busters/agents/camper',
-  stunner: '@busters/agents/stunner',
-};
+  const NAME_TO_SPEC: Record<string, string> = {
+    greedy: '@busters/agents/greedy',
+    random: '@busters/agents/random',
+    camper: '@busters/agents/camper',
+    stunner: '@busters/agents/stunner',
+    defender: '@busters/agents/defender',
+    scout: '@busters/agents/scout',
+  };
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
