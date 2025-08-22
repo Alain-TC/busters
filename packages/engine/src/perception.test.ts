@@ -90,3 +90,18 @@ test('enemy stun cooldown is hidden', () => {
   assert.equal(myEntity.value, 5);
   assert.equal(enemyEntity.value, 0);
 });
+
+test('ranges in observations are actual distances', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 1 });
+  const me = state.busters.find(b => b.teamId === 0)!;
+  const ally = state.busters.find(b => b.teamId === 0 && b.id !== me.id)!;
+  const ghost = state.ghosts[0];
+
+  me.x = 0; me.y = 0;
+  ally.x = 3; ally.y = 4; // distance 5
+  ghost.x = 6; ghost.y = 8; // distance 10
+
+  const obs = observationsForTeam(state, 0)[0];
+  assert.equal(obs.allies[0].range, 5);
+  assert.equal(obs.ghostsVisible[0].range, 10);
+});
