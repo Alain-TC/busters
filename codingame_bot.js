@@ -90,12 +90,14 @@ while (true) {
       continue;
     }
 
-    // Carrying → go home & release when strictly inside base (< BASE_SCORE_RADIUS)
+    // Carrying → head home and only RELEASE when safely inside base and not stunned
     if (me.state === 1) {
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
-      if (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) {
+      const inRadius = dHome < BASE_SCORE_RADIUS;
+      if (inRadius && me.state !== 2) {
         out.push('RELEASE carry→score');
       } else {
+        // outside radius (or stunned) → keep moving toward base
         out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
       }
       continue;

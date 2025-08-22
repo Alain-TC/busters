@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HybridState, predictEnemyPath, type EnemySeen } from './lib/state';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
+import { execSync } from 'node:child_process';
 
 test('trackEnemies records velocity and last two positions', () => {
   const st = new HybridState();
@@ -74,5 +79,41 @@ test('updateCorridors tracks unseen carrier path and decays', () => {
   st.decayCorridors();
   const after = st.corridorProbAt(p);
   assert.ok(after < before);
+});
+
+test('codingame bot does not RELEASE when outside base radius', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const root = path.resolve(__dirname, '..', '..');
+  const botPath = path.join(root, 'codingame_bot.js');
+  let code: string;
+  try {
+    code = fs.readFileSync(botPath, 'utf8');
+  } catch {
+    // file may be removed by other tests; fall back to staged blob
+    code = execSync('git show :codingame_bot.js', { cwd: root, encoding: 'utf8' });
+  }
+  const inputs = [
+    '1', // busters per player
+    '0', // ghost count
+    '0', // my team id
+    '1', // number of entities
+    // id x y team state value -> carrying ghost outside base radius
+    `0 1601 0 0 1 0`
+  ];
+  const outputs: string[] = [];
+  function readline() {
+    if (inputs.length === 0) throw new Error('EOF');
+    return inputs.shift() as string;
+  }
+  try {
+    vm.runInNewContext(code, {
+      readline,
+      console: { log: (s: string) => outputs.push(String(s)) }
+    });
+  } catch {
+    // expected to throw once inputs are exhausted to stop loop
+  }
+  assert.equal(outputs.length, 1);
+  assert.ok(!outputs[0].startsWith('RELEASE'), 'should not release outside base');
 });
 
