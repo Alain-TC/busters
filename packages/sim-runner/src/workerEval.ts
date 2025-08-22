@@ -1,6 +1,7 @@
 import { parentPort } from "worker_threads";
 import { runEpisodes } from "./runEpisodes";
 import { loadBotModule } from "./loadBots";
+import { RULES } from "@busters/shared";
 
 // Match the Genome used across the runner
 type Genome = { radarTurn:number; stunRange:number; releaseDist:number };
@@ -21,9 +22,18 @@ function coerceGenome(g: any): Genome {
 
 export function genomeToBot(genome: Genome) {
   const g = coerceGenome(genome); // close over a validated genome
+  const stunCd = new Map<number, number>();
+  let lastTick = -1;
   return {
     meta: { name: "EvolvedBot", version: "ga" },
     act(ctx: any, obs: any) {
+      if (obs.tick !== lastTick) {
+        lastTick = obs.tick;
+        for (const [id, cd] of stunCd.entries()) {
+          const n = cd - 1;
+          if (n > 0) stunCd.set(id, n); else stunCd.delete(id);
+        }
+      }
       // Carrying → go home & RELEASE near base
       if (obs.self.carrying !== undefined) {
         const dHome = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
@@ -32,7 +42,9 @@ export function genomeToBot(genome: Genome) {
       }
       // Opportunistic STUN
       const enemy = obs.enemies?.[0];
-      if (enemy && enemy.range <= g.stunRange && obs.self.stunCd <= 0) {
+      const cdLeft = obs.self.stunCd ?? stunCd.get(obs.self.id) ?? 0;
+      if (enemy && enemy.range <= g.stunRange && cdLeft <= 0) {
+        stunCd.set(obs.self.id, RULES.STUN_COOLDOWN);
         return { type: "STUN", busterId: enemy.id };
       }
       // Ghost hunt
