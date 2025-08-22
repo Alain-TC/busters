@@ -21,7 +21,8 @@ import {
   microOverBudget,
 } from "./micro";
 import { hungarian } from "./hungarian";
-import { clamp, dist, norm } from "@busters/shared";
+// Import basic vector helpers directly to avoid workspace package resolution issues
+import { clamp, dist, norm } from "../shared/src/vec.ts";
 
 const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
 

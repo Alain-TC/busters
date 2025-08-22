@@ -1,4 +1,5 @@
-import type { AgentContext, Observation, Action } from '@busters/shared';
+// Import shared types locally to avoid depending on workspace package resolution
+import type { AgentContext, Observation, Action } from '../shared/src/types.ts';
 
 const WAYPOINTS = [
   { x: 0, y: 0 },

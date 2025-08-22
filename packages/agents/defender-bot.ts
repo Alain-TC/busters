@@ -1,4 +1,5 @@
-import type { AgentContext, Observation, Action } from '@busters/shared';
+// Type imports from shared package via relative path to avoid resolution issues
+import type { AgentContext, Observation, Action } from '../shared/src/types.ts';
 
 export function act(ctx: AgentContext, obs: Observation): Action {
   const me = obs.self;
