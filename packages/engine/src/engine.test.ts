@@ -315,6 +315,19 @@ test('stun attempt consumes cooldown even if invalid or out of range', () => {
   assert.equal(postAttacker2.stunCd, RULES.STUN_COOLDOWN - 1);
 });
 
+test('stun action is ignored while on cooldown', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const attacker = state.busters.find(b => b.teamId === 0)!;
+  const victim = state.busters.find(b => b.teamId === 1)!;
+  attacker.stunCd = 1; // cooldown active
+  const actions: ActionsByTeam = { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any;
+  const next = step(state, actions);
+  const postAttacker = next.busters.find(b => b.id === attacker.id)!;
+  const postVictim = next.busters.find(b => b.id === victim.id)!;
+  assert.equal(postAttacker.stunCd, 0); // only decremented
+  assert.equal(postVictim.state, 0); // not stunned
+});
+
 test('mutual stuns drop carried ghosts and stun both busters', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 2 });
   const b0 = state.busters.find(b => b.teamId === 0)!;

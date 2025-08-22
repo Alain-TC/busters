@@ -119,9 +119,13 @@ export function collectIntents(
           break;
         case 'RELEASE':
         case 'RADAR':
-        case 'STUN':
         case 'BUST':
           intents.set(b.id, a);
+          break;
+        case 'STUN':
+          if (b.stunCd <= 0) {
+            intents.set(b.id, a);
+          }
           break;
         case 'EJECT': {
           const dx = a.x - b.x,

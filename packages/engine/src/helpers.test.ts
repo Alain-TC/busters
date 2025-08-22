@@ -22,6 +22,22 @@ test('collectIntents ignores stunned busters and clamps MOVE', () => {
   assert.ok(!intents.has(b1.id));
 });
 
+test('collectIntents skips STUN when on cooldown', () => {
+  const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
+  const next = { ...state, busters: state.busters.map(b => ({ ...b })) };
+  const byTeam: Record<number, typeof next.busters> = { 0: [], 1: [] } as any;
+  next.busters.forEach(b => byTeam[b.teamId].push(b));
+  const attacker = next.busters[0];
+  const victim = next.busters.find(b => b.teamId === 1)!;
+  attacker.stunCd = 1; // still cooling down
+  const actions: ActionsByTeam = {
+    0: [{ type: 'STUN', busterId: victim.id }],
+    1: [],
+  } as any;
+  const intents = collectIntents(next, actions, byTeam as any);
+  assert.ok(!intents.has(attacker.id));
+});
+
 test('applyMoves respects speed limit', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
   const next = { ...state, busters: state.busters.map(b => ({ ...b })) };
