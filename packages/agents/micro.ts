@@ -1,10 +1,12 @@
 /** Tiny, fast "micro-rollout" heuristics used inside assignment scores. */
 /** No external deps; keep everything numerically cheap. */
 
+import { RULES } from "@busters/shared";
+
+const SPEED = RULES.MOVE_SPEED; // buster speed per turn
+
 type Pt = { x: number; y: number };
 type Ent = { id: number; x: number; y: number; state?: number; range?: number };
-
-const SPEED = 800; // buster speed per turn
 
 function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);

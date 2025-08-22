@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta } from './micro';
+import { RULES } from '@busters/shared';
 
 // Verify contested bust uses projected positions
-const STUN = 1760;
-const BUST_MIN = 900;
-const BUST_MAX = 1760;
+const STUN = RULES.STUN_RANGE;
+const BUST_MIN = RULES.BUST_MIN;
+const BUST_MAX = RULES.BUST_MAX;
 
 test('contested bust projects one turn ahead', () => {
   const me = { id: 1, x: 2000, y: 0 };
