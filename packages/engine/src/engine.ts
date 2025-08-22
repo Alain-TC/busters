@@ -253,6 +253,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   const next: GameState = {
     ...state,
     tick: state.tick + 1,
+    scores: { ...state.scores },
     busters: state.busters.map(b => ({ ...b })),
     ghosts: state.ghosts.map(g => ({ ...g, engagedBy: 0 })),
     radarNextVision: {}, // ← will be filled by RADAR uses this tick, to apply on *next* tick

@@ -137,6 +137,8 @@ const release: ActionsByTeam = { 0: [{ type: 'RELEASE' }], 1: [] } as any;
 const end = step(mid, release);
 const bEnd = end.busters[0];
 assert.equal(end.scores[0], 1);
+assert.equal(mid.scores[0], 0);
+assert.equal(state.scores[0], 0);
 assert.equal(bEnd.state, 0);
 assert.equal(bEnd.value, 0);
 });
