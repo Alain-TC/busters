@@ -1,4 +1,4 @@
-import { GameState, Observation, TeamId } from '@busters/shared';
+import { GameState, Observation, TeamId, BusterState } from '@busters/shared';
 import { RULES, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import { dist2 } from '@busters/shared';
 
@@ -36,7 +36,7 @@ export function observationsForTeam(state: GameState, teamId: TeamId): Observati
       if (b.id === me.id) continue;
       const d2 = dist2(me.x, me.y, b.x, b.y);
       if (d2 <= vision2) {
-        allies.push({ id: b.id, x: b.x, y: b.y, range2: d2, stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined });
+        allies.push({ id: b.id, x: b.x, y: b.y, range2: d2, stunnedFor: b.state === BusterState.Stunned ? (b.value as number) : 0, carrying: b.state === BusterState.Carrying ? (b.value as number) : undefined });
       }
     }
     allies.sort((a, b) => a.range2 - b.range2);
@@ -45,14 +45,14 @@ export function observationsForTeam(state: GameState, teamId: TeamId): Observati
     for (const b of opp) {
       const d2 = dist2(me.x, me.y, b.x, b.y);
       if (d2 <= vision2) {
-        enemies.push({ id: b.id, x: b.x, y: b.y, range2: d2, stunnedFor: b.state === 2 ? (b.value as number) : 0, carrying: b.state === 1 ? (b.value as number) : undefined });
+        enemies.push({ id: b.id, x: b.x, y: b.y, range2: d2, stunnedFor: b.state === BusterState.Stunned ? (b.value as number) : 0, carrying: b.state === BusterState.Carrying ? (b.value as number) : undefined });
       }
     }
     enemies.sort((a, b) => a.range2 - b.range2);
 
     res.push({
       tick: state.tick,
-      self: { id: me.id, x: me.x, y: me.y, stunnedFor: me.state === 2 ? (me.value as number) : 0, carrying: me.state === 1 ? (me.value as number) : undefined, stunCd: me.stunCd, radarUsed: me.radarUsed },
+      self: { id: me.id, x: me.x, y: me.y, stunnedFor: me.state === BusterState.Stunned ? (me.value as number) : 0, carrying: me.state === BusterState.Carrying ? (me.value as number) : undefined, stunCd: me.stunCd, radarUsed: me.radarUsed },
       myBase: base,
       ghostsVisible: ghosts.map(g => ({ id: g.id, x: g.x, y: g.y, range: Math.sqrt(g.range2), endurance: g.endurance })),
       allies: allies.map(a => ({ id: a.id, x: a.x, y: a.y, range: Math.sqrt(a.range2), stunnedFor: a.stunnedFor, carrying: a.carrying })),
@@ -97,7 +97,7 @@ export function entitiesForTeam(state: GameState, teamId: TeamId): EntityView[] 
     y: b.y,
     entityType: teamId,
     state: b.state,
-    value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : b.stunCd
+    value: b.state === BusterState.Carrying || b.state === BusterState.Stunned || b.state === BusterState.Busting ? b.value : b.stunCd
   }));
 
   const enemies = Array.from(visibleEnemies.values())
@@ -108,7 +108,7 @@ export function entitiesForTeam(state: GameState, teamId: TeamId): EntityView[] 
       y: b.y,
       entityType: b.teamId,
       state: b.state,
-      value: b.state === 1 || b.state === 2 || b.state === 3 ? b.value : 0
+      value: b.state === BusterState.Carrying || b.state === BusterState.Stunned || b.state === BusterState.Busting ? b.value : 0
     }));
 
   const ghosts = Array.from(visibleGhosts.values()).map(g => ({

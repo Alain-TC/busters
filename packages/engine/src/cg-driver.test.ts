@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
 import { parseAction, readLines } from './cg-driver';
-import { TEAM0_BASE, RULES, MAX_TICKS } from '@busters/shared';
+import { TEAM0_BASE, RULES, MAX_TICKS, BusterState } from '@busters/shared';
 import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
 
@@ -27,7 +27,7 @@ test('loop ends when no ghosts remain and none are carried', () => {
       ? { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any
       : { 0: [{ type: 'RELEASE' }], 1: [] } as any;
     state = step(state, actions);
-    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === 1)) {
+    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === BusterState.Carrying)) {
       break;
     }
   }

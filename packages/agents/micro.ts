@@ -129,7 +129,6 @@ export function twoTurnContestDelta(opts: {
   canStunEnemy: boolean;
 }) {
   microPerf.twoTurnCalls++;
-  if (microOverBudget()) return 0;
   const { me, enemy, ghost, bustMin, bustMax, stunRange, canStunMe, canStunEnemy } = opts;
   const key = cacheKey(
     me.x,
@@ -147,6 +146,7 @@ export function twoTurnContestDelta(opts: {
   );
   const cached = twoTurnContestCache.get(key);
   if (cached !== undefined) return cached;
+  if (microOverBudget()) return 0;
   const t0 = performance.now();
   const me1 = step(me, ghost ?? enemy);
   const enemy1 = step(enemy, ghost ?? me);
@@ -193,7 +193,6 @@ export function twoTurnInterceptDelta(opts: {
   canStunEnemy: boolean;
 }) {
   microPerf.interceptCalls++;
-  if (microOverBudget()) return 0;
   const { me, enemy, myBase, stunRange, canStunMe, canStunEnemy } = opts;
   const key = cacheKey(
     me.x,
@@ -208,6 +207,7 @@ export function twoTurnInterceptDelta(opts: {
   );
   const cached = twoTurnInterceptCache.get(key);
   if (cached !== undefined) return cached;
+  if (microOverBudget()) return 0;
   const t0 = performance.now();
   const P = estimateInterceptPoint(me, enemy, myBase);
   const me1 = step(me, P);
@@ -282,7 +282,6 @@ export function twoTurnEjectDelta(opts: {
   canStunEnemy: boolean;
 }) {
   microPerf.ejectCalls++;
-  if (microOverBudget()) return 0;
   const { me, enemy, target, myBase, stunRange, canStunEnemy } = opts;
   const key = cacheKey(
     me.x,
@@ -298,6 +297,7 @@ export function twoTurnEjectDelta(opts: {
   );
   const cached = twoTurnEjectCache.get(key);
   if (cached !== undefined) return cached;
+  if (microOverBudget()) return 0;
   const t0 = performance.now();
   const me1 = step(me, target);
   const enemy1 = step(enemy, target);

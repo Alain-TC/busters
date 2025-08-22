@@ -5,6 +5,7 @@ export const meta = { name: "HybridBaseline" };
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN, Tune, Weights } from "./hybrid-params";
 import { Fog } from "./fog";
 import { HybridState, getState, predictEnemyPath } from "./lib/state";
+import { BusterState } from '@busters/shared';
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -168,7 +169,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
   // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
-    if (e.state === 1) {
+    if (e.state === BusterState.Carrying) {
       const tx = Math.round((e.x + MY.x) / 2);
       const ty = Math.round((e.y + MY.y) / 2);
       tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
@@ -226,7 +227,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   for (const e of enemies) {
     const alliesNear = team.filter(f => f.id !== e.id && dist(f.x, f.y, e.x, e.y) <= TUNE.STUN_RANGE);
     const ready = alliesNear.some(a => M(a.id).stunReadyAt <= tick);
-    if (alliesNear.length && ready && (e.state !== 2 || (e.stunnedFor ?? 0) <= 2)) {
+    if (alliesNear.length && ready && (e.state !== BusterState.Stunned || (e.stunnedFor ?? 0) <= 2)) {
       tasks.push({
         type: "SUPPORT",
         target: { x: e.x, y: e.y },
@@ -238,7 +239,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
   // CARRY allies back to base
   for (const mate of team) {
-    const isCarrying = mate.carrying !== undefined || mate.state === 1;
+    const isCarrying = mate.carrying !== undefined || mate.state === BusterState.Carrying;
     if (!isCarrying) continue;
     const mid = { x: Math.round((mate.x + MY.x) / 2), y: Math.round((mate.y + MY.y) / 2) };
     const near = enemies.filter(e => dist(e.x, e.y, mid.x, mid.y) <= ENEMY_NEAR_RADIUS).length;
@@ -247,7 +248,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   }
 
   // BLOCK enemy base (if no carriers seen)
-  if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
+  if (!enemies.some(e => e.state === BusterState.Carrying) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
     tasks.push({ type: "BLOCK", target: blockerRing(TUNE, MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
@@ -314,12 +315,12 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
       s = t.baseScore - d * WEIGHTS.DIST_PEN - d * WEIGHTS.INTERCEPT_DIST_PEN;
       const be = bDist(enemy);
       if (be <= STUN_CHECK_RADIUS) {
-        s += micro(() => duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE }));
+        s += micro(() => duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== BusterState.Stunned, stunRange: TUNE.STUN_RANGE }));
         s += micro(() => interceptDelta({ me: b, enemy, myBase: MY }));
         s += micro(() => releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE }));
       }
       const near = (enemy.range ?? be) <= STUN_CHECK_RADIUS;
-      const threat = enemy.state === 1 && mDist(enemy) <= TUNE.RELEASE_DIST + 2000;
+      const threat = enemy.state === BusterState.Carrying && mDist(enemy) <= TUNE.RELEASE_DIST + 2000;
       if ((near || threat) && be <= STUN_CHECK_RADIUS) {
         s += micro(() =>
           twoTurnInterceptDelta({
@@ -328,7 +329,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
             myBase: MY,
             stunRange: TUNE.STUN_RANGE,
             canStunMe,
-            canStunEnemy: enemy.state !== 2,
+            canStunEnemy: enemy.state !== BusterState.Stunned,
           })
         );
       }
@@ -366,7 +367,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
           bustMax: BUST_MAX,
           stunRange: TUNE.STUN_RANGE,
           canStunMe,
-          canStunEnemy: e.state !== 2,
+          canStunEnemy: e.state !== BusterState.Stunned,
         })
       );
     }
@@ -388,7 +389,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
   }
 
   if (t.type === "BLOCK") {
-    const carrier = enemies.find(e => e.state === 1);
+    const carrier = enemies.find(e => e.state === BusterState.Carrying);
     if (carrier) {
       const be = bDist(carrier);
       if (be <= STUN_CHECK_RADIUS) {
@@ -402,7 +403,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
               bustMax: BUST_MAX,
               stunRange: TUNE.STUN_RANGE,
               canStunMe,
-              canStunEnemy: carrier.state !== 2,
+              canStunEnemy: carrier.state !== BusterState.Stunned,
             })
           );
         }
@@ -512,11 +513,11 @@ export function handleInstantActions(params: InstantParams) {
   }
 
   let targetEnemy: Ent | undefined = enemies.find(e =>
-    e.state === 1 && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x, me.y, e.x, e.y)) <= TUNE.STUN_RANGE
+    e.state === BusterState.Carrying && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x, me.y, e.x, e.y)) <= TUNE.STUN_RANGE
   );
   if (!targetEnemy) {
     const cand = enemies.find(e =>
-      e.state !== 2 && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x, me.y, e.x, e.y)) <= BUST_MAX
+      e.state !== BusterState.Stunned && (e.stunnedFor ?? 0) <= 0 && (e.range ?? dist(me.x, me.y, e.x, e.y)) <= BUST_MAX
     );
     if (cand) targetEnemy = cand;
   }
@@ -527,11 +528,11 @@ export function handleInstantActions(params: InstantParams) {
           me,
           enemy: targetEnemy!,
           canStunMe: true,
-          canStunEnemy: targetEnemy!.state !== 2,
+          canStunEnemy: targetEnemy!.state !== BusterState.Stunned,
           stunRange: TUNE.STUN_RANGE,
         })
       ) +
-      (targetEnemy.state === 1
+      (targetEnemy.state === BusterState.Carrying
         ? micro(() => releaseBlockDelta({ blocker: me, carrier: targetEnemy!, myBase: MY, stunRange: TUNE.STUN_RANGE }))
         : 0);
     if (duel >= 0) {
@@ -539,7 +540,7 @@ export function handleInstantActions(params: InstantParams) {
       return dbg(
         { type: "STUN", busterId: targetEnemy.id },
         "STUN",
-        targetEnemy.state === 1 ? "enemy_carrier" : "threat"
+        targetEnemy.state === BusterState.Carrying ? "enemy_carrier" : "threat"
       );
     }
   }
@@ -624,7 +625,7 @@ export function executePlan(args: ExecuteArgs) {
               target: { x: tx, y: ty },
               myBase: MY,
               stunRange: TUNE.STUN_RANGE,
-              canStunEnemy: enemy.state !== 2,
+              canStunEnemy: enemy.state !== BusterState.Stunned,
             })
           )
         );
@@ -663,7 +664,7 @@ export function executePlan(args: ExecuteArgs) {
                 bustMax: BUST_MAX,
                 stunRange: TUNE.STUN_RANGE,
                 canStunMe: canStun,
-                canStunEnemy: e.state !== 2,
+                canStunEnemy: e.state !== BusterState.Stunned,
               })
             )
           );
@@ -678,7 +679,7 @@ export function executePlan(args: ExecuteArgs) {
             me,
             enemy,
             canStunMe: true,
-            canStunEnemy: enemy.state !== 2,
+            canStunEnemy: enemy.state !== BusterState.Stunned,
             stunRange: TUNE.STUN_RANGE,
           })
         );
@@ -728,7 +729,7 @@ export function executePlan(args: ExecuteArgs) {
                   bustMax: BUST_MAX,
                   stunRange: TUNE.STUN_RANGE,
                   canStunMe: canStun,
-                  canStunEnemy: e.state !== 2,
+                  canStunEnemy: e.state !== BusterState.Stunned,
                 })
               );
             }
@@ -753,7 +754,7 @@ export function executePlan(args: ExecuteArgs) {
           deltas.push(micro(() => interceptDelta({ me: sim, enemy, myBase: MY })));
           deltas.push(micro(() => releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE })));
           const near = (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= STUN_CHECK_RADIUS;
-          const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
+          const threat = enemy.state === BusterState.Carrying && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
           if (near || threat) {
             deltas.push(
               micro(() =>
@@ -763,7 +764,7 @@ export function executePlan(args: ExecuteArgs) {
                   myBase: MY,
                   stunRange: TUNE.STUN_RANGE,
                   canStunMe: canStun,
-                  canStunEnemy: enemy.state !== 2,
+                  canStunEnemy: enemy.state !== BusterState.Stunned,
                 })
               )
             );
@@ -778,7 +779,7 @@ export function executePlan(args: ExecuteArgs) {
             me,
             enemy,
             canStunMe: true,
-            canStunEnemy: enemy.state !== 2,
+            canStunEnemy: enemy.state !== BusterState.Stunned,
             stunRange: TUNE.STUN_RANGE,
           })
         );
@@ -789,7 +790,7 @@ export function executePlan(args: ExecuteArgs) {
             myBase: MY,
             stunRange: TUNE.STUN_RANGE,
             canStunMe: true,
-            canStunEnemy: enemy.state !== 2,
+            canStunEnemy: enemy.state !== BusterState.Stunned,
           })
         );
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "intercept" });
@@ -814,7 +815,7 @@ export function executePlan(args: ExecuteArgs) {
             me,
             enemy,
             canStunMe: true,
-            canStunEnemy: enemy.state !== 2,
+            canStunEnemy: enemy.state !== BusterState.Stunned,
             stunRange: TUNE.STUN_RANGE,
           })
         );
@@ -860,7 +861,7 @@ export function executePlan(args: ExecuteArgs) {
       }
 
       if (myTask.type === "BLOCK") {
-        const carrier = enemiesAll.find(e => e.state === 1);
+        const carrier = enemiesAll.find(e => e.state === BusterState.Carrying);
         if (carrier) {
           let delta = micro(() => releaseBlockDelta({ blocker: me, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE }));
           if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000) {
@@ -872,7 +873,7 @@ export function executePlan(args: ExecuteArgs) {
                 bustMax: BUST_MAX,
                 stunRange: TUNE.STUN_RANGE,
                 canStunMe: canStun,
-                canStunEnemy: carrier.state !== 2,
+                canStunEnemy: carrier.state !== BusterState.Stunned,
               })
             );
           }
@@ -950,7 +951,7 @@ export function act(ctx: Ctx, obs: Obs) {
   const { my: MY, enemy: EN } = resolveBases(ctx);
   const enemiesObs = (obs.enemies ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
   const ghosts  = (obs.ghostsVisible ?? []).slice().sort((a,b)=> (a.range ?? dist(me.x,me.y,a.x,a.y)) - (b.range ?? dist(me.x,me.y,b.x,b.y)));
-  const remembered = Array.from(state.enemies.values()).map(e => ({ id: e.id, x: e.last.x, y: e.last.y, state: e.carrying ? 1 : 0 }));
+  const remembered = Array.from(state.enemies.values()).map(e => ({ id: e.id, x: e.last.x, y: e.last.y, state: e.carrying ? BusterState.Carrying : BusterState.Idle }));
   const enemyMap = new Map<number, Ent>();
   for (const e of enemiesObs) enemyMap.set(e.id, e);
   for (const e of remembered) if (!enemyMap.has(e.id)) enemyMap.set(e.id, e);
@@ -965,8 +966,8 @@ export function act(ctx: Ctx, obs: Obs) {
   (me as any).localIndex = (me as any).localIndex ?? (me.id % bpp);
   const localIdx = (me as any).localIndex;
 
-  const carrying = me.carrying !== undefined ? true : (me.state === 1);
-  const stunned = (me.state === 2);
+  const carrying = me.carrying !== undefined ? true : (me.state === BusterState.Carrying);
+  const stunned = (me.state === BusterState.Stunned);
   const stunCdLeft = me.stunCd ?? Math.max(0, (m.stunReadyAt - tick));
   const canStun = !stunned && stunCdLeft <= 0;
 

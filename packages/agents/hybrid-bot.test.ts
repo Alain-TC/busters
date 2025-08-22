@@ -5,18 +5,19 @@ import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
 import { TUNE } from './hybrid-params';
+import { BusterState } from '@busters/shared';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
   __mem.set(99, { stunReadyAt: 5, radarUsed: true });
 
   const ctx: any = {};
-  const baseObs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const baseObs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, baseObs);
   assert.ok(!__mem.has(99));
   assert.ok(__mem.has(1));
 
-  const nextObs: any = { tick: 2, self: { id: 2, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const nextObs: any = { tick: 2, self: { id: 2, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, nextObs);
   assert.ok(__mem.has(1) && __mem.has(2));
 });
@@ -27,7 +28,7 @@ test('patrol indices reset on new match', () => {
   __pMem.set(99, { wp: 2 });
 
   const ctx: any = {};
-  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, obs);
 
   // old entries cleared and waypoint reset to zero
@@ -37,19 +38,19 @@ test('patrol indices reset on new match', () => {
 
 test('mem entries removed when busters disappear', () => {
   const ctx: any = {};
-  const obs1: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [{ id: 2, x: 0, y: 0, state: 0 }], enemies: [], ghostsVisible: [] };
+  const obs1: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [{ id: 2, x: 0, y: 0, state: BusterState.Idle }], enemies: [], ghostsVisible: [] };
   act(ctx, obs1);
-  const obs2: any = { tick: 0, self: { id: 2, x: 0, y: 0, state: 0 }, friends: [{ id: 1, x: 0, y: 0, state: 0 }], enemies: [], ghostsVisible: [] };
+  const obs2: any = { tick: 0, self: { id: 2, x: 0, y: 0, state: BusterState.Idle }, friends: [{ id: 1, x: 0, y: 0, state: BusterState.Idle }], enemies: [], ghostsVisible: [] };
   act(ctx, obs2);
   assert.ok(__mem.has(1) && __mem.has(2));
 
   // only buster 1 acts on tick 1
-  const obs3: any = { tick: 1, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const obs3: any = { tick: 1, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, obs3);
   assert.ok(__mem.has(1) && __mem.has(2));
 
   // next tick triggers cleanup for missing buster
-  const obs4: any = { tick: 2, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const obs4: any = { tick: 2, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, obs4);
   assert.ok(__mem.has(1));
   assert.ok(!__mem.has(2));
@@ -58,7 +59,7 @@ test('mem entries removed when busters disappear', () => {
 test('memory can be serialized, reset, and restored', () => {
   resetHybridMemory();
   const ctx: any = {};
-  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] };
   act(ctx, obs);
   __pMem.set(5, { wp: 1 });
   const snap = serializeHybridMemory();
@@ -108,7 +109,7 @@ test('explore task score increases with fog heat', () => {
   __fog.reset();
   __fog.beginTick(10);
   const ctx: any = { tick: 10, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 0, y: 0, state: 0 };
+  const self: any = { id: 1, x: 0, y: 0, state: BusterState.Idle };
   const obs: any = { tick: 10, self, friends: [], enemies: [], ghostsVisible: [] };
   const st = new HybridState();
   st.updateRoles([self]);
@@ -190,16 +191,16 @@ test('runAuction respects HUNGARIAN_MAX_COMBOS override', async () => {
 test('bot does not stun an already stunned enemy', () => {
   __mem.clear();
   const ctx: any = {};
-  const self = { id: 1, x: 0, y: 0, state: 0 };
-  let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  const self = { id: 1, x: 0, y: 0, state: BusterState.Idle };
+  let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
   let action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 
-  obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 2, range: 0, stunnedFor: 5 }], ghostsVisible: [] };
+  obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Stunned, range: 0, stunnedFor: 5 }], ghostsVisible: [] };
   action = act(ctx, obs);
   assert.notEqual(action.type, 'STUN');
 
-  obs = { tick: 22, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  obs = { tick: 22, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
   action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 });
@@ -207,16 +208,16 @@ test('bot does not stun an already stunned enemy', () => {
 test('stun cooldown enforced when stunCd missing', () => {
   __mem.clear();
   const ctx: any = {};
-  const self = { id: 1, x: 0, y: 0, state: 0 };
-  let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  const self = { id: 1, x: 0, y: 0, state: BusterState.Idle };
+  let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
   let action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 
-  obs = { tick: 10, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  obs = { tick: 10, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
   action = act(ctx, obs);
   assert.notEqual(action.type, 'STUN');
 
-  obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
+  obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
   action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 });
@@ -251,8 +252,8 @@ test('scoreAssign ignores distant enemies for bust tasks', () => {
 test('drops bust when assigned ghost disappears', () => {
   __mem.clear();
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const b1: any = { id: 1, x: 0, y: 0, state: 0 };
-  const b2: any = { id: 2, x: 5000, y: 0, state: 0 };
+  const b1: any = { id: 1, x: 0, y: 0, state: BusterState.Idle };
+  const b2: any = { id: 2, x: 5000, y: 0, state: BusterState.Idle };
   const g1 = { id: 1, x: 5200, y: 0, range: 200 };
   const obs1: any = { tick: 0, self: b1, friends: [b2], enemies: [], ghostsVisible: [g1] };
   const state = new HybridState();
@@ -277,8 +278,8 @@ test('drops bust when assigned ghost disappears', () => {
 test('ejects when threatened and stun on cooldown', () => {
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
-  const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 5 };
-  const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
+  const self = { id: 1, x: 4000, y: 4000, state: BusterState.Carrying, stunCd: 5 };
+  const enemy = { id: 2, x: 4200, y: 4000, state: BusterState.Idle, range: 200, stunnedFor: 0 };
   const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
   const actRes = act(ctx, obs);
   assert.equal(actRes.type, 'EJECT');
@@ -287,8 +288,8 @@ test('ejects when threatened and stun on cooldown', () => {
 test('ejects to closer ally when safe', () => {
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
-  const self = { id: 1, x: 6000, y: 6000, state: 1, stunCd: 10 };
-  const ally = { id: 3, x: 5000, y: 5000, state: 0 };
+  const self = { id: 1, x: 6000, y: 6000, state: BusterState.Carrying, stunCd: 10 };
+  const ally = { id: 3, x: 5000, y: 5000, state: BusterState.Idle };
   const obs: any = { tick: 5, self, friends: [ally], enemies: [], ghostsVisible: [] };
   const actRes = act(ctx, obs);
   assert.equal(actRes.type, 'EJECT');
@@ -297,8 +298,8 @@ test('ejects to closer ally when safe', () => {
 test('does not eject when stun ready', () => {
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
-  const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 0 };
-  const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
+  const self = { id: 1, x: 4000, y: 4000, state: BusterState.Carrying, stunCd: 0 };
+  const enemy = { id: 2, x: 4200, y: 4000, state: BusterState.Idle, range: 200, stunnedFor: 0 };
   const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
   const actRes = act(ctx, obs);
   assert.notEqual(actRes.type, 'EJECT');
@@ -307,8 +308,8 @@ test('does not eject when stun ready', () => {
 test('releases when carrying inside base radius', () => {
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
-  act(ctx, { tick: 0, self: { id: 99, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] });
-  const self = { id: 1, x: 1000, y: 1000, state: 1, stunCd: 5 };
+  act(ctx, { tick: 0, self: { id: 99, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] });
+  const self = { id: 1, x: 1000, y: 1000, state: BusterState.Carrying, stunCd: 5 };
   const obs: any = { tick: 20, self, friends: [], enemies: [], ghostsVisible: [] };
   const actRes = act(ctx, obs);
   assert.equal(actRes.type, 'RELEASE');
@@ -316,7 +317,7 @@ test('releases when carrying inside base radius', () => {
 
 test('buildTasks emits carry tasks for carriers', () => {
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 1000, y: 1000, state: 1 };
+  const self: any = { id: 1, x: 1000, y: 1000, state: BusterState.Carrying };
   const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
   const st = new HybridState();
   st.updateRoles([self]);
@@ -327,14 +328,14 @@ test('buildTasks emits carry tasks for carriers', () => {
 test('scheduled RADAR activates at RADAR1_TURN and RADAR2_TURN', () => {
   __mem.clear();
   const ctx1: any = { tick: TUNE.RADAR1_TURN };
-  const b1: any = { id: 1, x: 0, y: 0, state: 0, localIndex: 0 };
+  const b1: any = { id: 1, x: 0, y: 0, state: BusterState.Idle, localIndex: 0 };
   const obs1: any = { tick: TUNE.RADAR1_TURN, self: b1, friends: [], enemies: [], ghostsVisible: [] };
   const act1 = act(ctx1, obs1);
   assert.equal(act1.type, 'RADAR');
 
   __mem.clear();
   const ctx2: any = { tick: TUNE.RADAR2_TURN };
-  const b2: any = { id: 2, x: 0, y: 0, state: 0, localIndex: 1 };
+  const b2: any = { id: 2, x: 0, y: 0, state: BusterState.Idle, localIndex: 1 };
   const obs2: any = { tick: TUNE.RADAR2_TURN, self: b2, friends: [], enemies: [], ghostsVisible: [] };
   const act2 = act(ctx2, obs2);
   assert.equal(act2.type, 'RADAR');
@@ -342,14 +343,14 @@ test('scheduled RADAR activates at RADAR1_TURN and RADAR2_TURN', () => {
 
 test('BLOCK tasks redirect to INTERCEPT when a carrier appears', () => {
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 1000, y: 1000, state: 0 };
+  const self: any = { id: 1, x: 1000, y: 1000, state: BusterState.Idle };
   const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
   const st = new HybridState();
   st.updateRoles([self]);
   let tasks = __buildTasks(ctx, obs, st, ctx.myBase, ctx.enemyBase);
   assert.ok(tasks.some(t => t.type === 'BLOCK'));
 
-  const carrier: any = { id: 2, x: 8000, y: 4500, state: 1 };
+  const carrier: any = { id: 2, x: 8000, y: 4500, state: BusterState.Carrying };
   const obs2: any = { tick: 1, self, friends: [], enemies: [carrier], ghostsVisible: [] };
   tasks = __buildTasks({ ...ctx, tick: 1 }, obs2, st, ctx.myBase, ctx.enemyBase);
   assert.ok(!tasks.some(t => t.type === 'BLOCK'));
@@ -358,7 +359,7 @@ test('BLOCK tasks redirect to INTERCEPT when a carrier appears', () => {
 
 test('carrier can switch to higher-scoring task', () => {
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 1000, y: 1000, state: 1, carrying: 4 };
+  const self: any = { id: 1, x: 1000, y: 1000, state: BusterState.Carrying, carrying: 4 };
   const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
   const st = new HybridState();
   st.updateRoles([self]);
@@ -371,7 +372,7 @@ test('carrier can switch to higher-scoring task', () => {
 
 test('buildTasks uses predicted path for unseen carriers', () => {
   const ctx: any = { tick: 3, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 0, y: 0, state: 0 };
+  const self: any = { id: 1, x: 0, y: 0, state: BusterState.Idle };
   const obs: any = { tick: 3, self, friends: [], enemies: [], ghostsVisible: [] };
   const st = new HybridState();
   st.trackEnemies([{ id: 2, x: 2600, y: 1000, carrying: 1 }], 1);
@@ -386,14 +387,14 @@ test('buildTasks uses predicted path for unseen carriers', () => {
 test('buildTasks skips SUPPORT for enemies stunned for several ticks', () => {
   __mem.clear();
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
-  const self: any = { id: 1, x: 0, y: 0, state: 0 };
-  const enemy: any = { id: 2, x: 0, y: 0, state: 0, range: 0 };
+  const self: any = { id: 1, x: 0, y: 0, state: BusterState.Idle };
+  const enemy: any = { id: 2, x: 0, y: 0, state: BusterState.Idle, range: 0 };
   const st = new HybridState();
   st.updateRoles([self]);
   let tasks = __buildTasks(ctx, { tick: 0, self, friends: [], enemies: [enemy], ghostsVisible: [] }, st, ctx.myBase, ctx.enemyBase);
   assert.ok(tasks.some(t => t.type === 'SUPPORT' && t.payload?.enemyId === 2));
 
-  const stunned: any = { id: 2, x: 0, y: 0, state: 2, range: 0, stunnedFor: 5 };
+  const stunned: any = { id: 2, x: 0, y: 0, state: BusterState.Stunned, range: 0, stunnedFor: 5 };
   tasks = __buildTasks(ctx, { tick: 0, self, friends: [], enemies: [stunned], ghostsVisible: [] }, st, ctx.myBase, ctx.enemyBase);
   assert.ok(!tasks.some(t => t.type === 'SUPPORT' && t.payload?.enemyId === 2));
 });
