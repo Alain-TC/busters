@@ -50,7 +50,7 @@ export async function trainCemWeights(opts: TrainOpts) {
     const evals: { idx: number; fit: number }[] = [];
     for (let i = 0; i < pop; i++) {
       const w = vecToWeights(popVecs[i]);
-      const opp = selectOpponentsPFSP({ meId: "weights", candidates: oppPool, n: 1 })[0].id;
+      const opp = selectOpponentsPFSP({ meId: "weights", candidates: oppPool, n: 1, rng })[0].id;
       const fit = await evaluate(w, opp);
       evals.push({ idx: i, fit });
     }

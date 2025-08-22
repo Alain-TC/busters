@@ -17,6 +17,7 @@ export function selectOpponentsPFSP(params: {
   n?: number;
   target?: number;
   temperature?: number;
+  rng?: () => number;
 }): Opponent[] {
   const envTarget = Number(process.env.PFSP_TARGET);
   const envTemp = Number(process.env.PFSP_TEMP);
@@ -29,6 +30,7 @@ export function selectOpponentsPFSP(params: {
 
   const meId = params.meId;
   const elo: EloTable = params.elo ?? loadEloTable();
+  const rng = params.rng ?? Math.random;
 
   // Normalize candidate list defensively
   let cand: Opponent[] = [];
@@ -69,7 +71,7 @@ export function selectOpponentsPFSP(params: {
   const picks: Opponent[] = [];
   const used = new Set<number>();
   while (picks.length < n && used.size < probs.length) {
-    let r = Math.random();
+    let r = rng();
     let idx = -1;
     for (let i = 0; i < probs.length; i++) {
       if (used.has(i)) continue;
