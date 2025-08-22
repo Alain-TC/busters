@@ -3,6 +3,18 @@
 import type { BotModule } from "../types"; // If you don't have this, replace BotModule with: { meta?: any; act: Function }
 import { TUNE as BASE_TUNE, WEIGHTS as BASE_WEIGHTS } from "@busters/agents/hybrid-params";
 import { Fog } from "@busters/agents/fog";
+import {
+  PATROLS,
+  resolveBases,
+  spacedTarget,
+  blockerRing,
+  uniqTeam,
+  BUST_MIN,
+  BUST_MAX,
+  STUN_CD,
+  clamp,
+  dist,
+} from "@busters/agents/hybrid/utils";
 
 // Automatically derive weight keys so ORDER always includes all weights
 const WEIGHT_KEYS = Object.keys(BASE_WEIGHTS) as (keyof typeof BASE_WEIGHTS)[];
@@ -122,52 +134,6 @@ export function defaultSigmas(): number[] {
 export function makeHybridBotFromTW(tw: TW): BotModule {
   const TUNE = tw.TUNE;
   const WEIGHTS = tw.WEIGHTS;
-
-  // --- inline utils
-  const W = 16000, H = 9000;
-  const BUST_MIN = 900, BUST_MAX = 1760;
-  const STUN_CD = 20;
-
-  function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
-  function dist(ax: number, ay: number, bx: number, by: number) { return Math.hypot(ax - bx, ay - by); }
-  function norm(dx: number, dy: number) { const d = Math.hypot(dx, dy) || 1; return { x: dx / d, y: dy / d }; }
-
-  const PATROLS: Pt[][] = [
-    [ {x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500} ],
-    [ {x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500} ],
-    [ {x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000} ],
-    [ {x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500} ]
-  ];
-
-  function resolveBases(ctx: Ctx): { my: Pt; enemy: Pt } {
-    const my = ctx.myBase ?? { x: 0, y: 0 };
-    const enemy = ctx.enemyBase ?? { x: W - my.x, y: H - my.y };
-    return { my, enemy };
-  }
-
-  function spacedTarget(me: Ent, raw: Pt, friends?: Ent[]): Pt {
-    if (!friends || friends.length <= 1) {
-      const phase = ((me.id * 9301) ^ 0x9e37) & 1 ? 1 : -1;
-      const dir = norm(raw.x - me.x, raw.y - me.y);
-      const px = -dir.y, py = dir.x;
-      return { x: clamp(raw.x + phase * 220 * px, 0, W), y: clamp(raw.y + phase * 220 * py, 0, H) };
-    }
-    let nearest: Ent | undefined, best = Infinity;
-    for (const f of friends) {
-      if (f.id === me.id) continue;
-      const d = dist(me.x, me.y, f.x, f.y);
-      if (d < best) { best = d; nearest = f; }
-    }
-    if (!nearest || best >= TUNE.SPACING) return raw;
-    const away = norm(me.x - nearest.x, me.y - nearest.y);
-    return { x: clamp(raw.x + away.x * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + away.y * TUNE.SPACING_PUSH, 0, H) };
-  }
-
-  function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
-    const v = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
-    return { x: clamp(enemyBase.x - v.x * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - v.y * TUNE.BLOCK_RING, 0, H) };
-  }
-
   type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
   type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
@@ -181,13 +147,6 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
   function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
   const fog = new Fog();
   let lastTick = Infinity;
-
-  function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
-    const map = new Map<number, Ent>();
-    map.set(self.id, self);
-    (friends ?? []).forEach(f => map.set(f.id, f));
-    return Array.from(map.values());
-  }
 
   function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
     const tasks: Task[] = [];
@@ -221,7 +180,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
 
     // BLOCK enemy base (if no carriers seen)
     if (!enemies.some(e => e.state === 1)) {
-      tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
+      tasks.push({ type: "BLOCK", target: blockerRing(TUNE, MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
     }
 
     // EXPLORE: next waypoints from patrols
@@ -299,7 +258,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       if (carrying) {
         const d0 = dist(me.x, me.y, MY.x, MY.y);
         if (d0 <= TUNE.RELEASE_DIST) return { type: "RELEASE" };
-        const home = spacedTarget(me, MY, friends);
+        const home = spacedTarget(TUNE, me, MY, friends);
         return { type: "MOVE", x: home.x, y: home.y };
       }
 
@@ -322,7 +281,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
           return { type: "STUN", busterId: threatNearBase.id };
         }
         const mid = { x: Math.round((threatNearBase.x + MY.x) / 2), y: Math.round((threatNearBase.y + MY.y) / 2) };
-        const hold = spacedTarget(me, mid, friends);
+        const hold = spacedTarget(TUNE, me, mid, friends);
         return { type: "MOVE", x: hold.x, y: hold.y };
       }
 
@@ -354,28 +313,24 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
           const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];
           const r = dist(me.x, me.y, g.x, g.y);
           if (r >= BUST_MIN && r <= BUST_MAX) return { type: "BUST", ghostId: g.id };
-          const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
+          const chase = spacedTarget(TUNE, me, { x: g.x, y: g.y }, friends);
           return { type: "MOVE", x: chase.x, y: chase.y };
         }
         const tgt = myTask.target;
-        const P = spacedTarget(me, tgt, friends);
+        const P = spacedTarget(TUNE, me, tgt, friends);
         return { type: "MOVE", x: P.x, y: P.y };
       }
 
       // fallback
       if (ghosts.length) {
         const g = ghosts[0];
-        const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
+        const chase = spacedTarget(TUNE, me, { x: g.x, y: g.y }, friends);
         return { type: "MOVE", x: chase.x, y: chase.y };
       }
-      const back = spacedTarget(me, MY, friends);
+      const back = spacedTarget(TUNE, me, MY, friends);
       return { type: "MOVE", x: back.x, y: back.y };
     },
   };
 
-  return bot;
-}
-
-/** Simple clamp */
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
-
+    return bot;
+  }
