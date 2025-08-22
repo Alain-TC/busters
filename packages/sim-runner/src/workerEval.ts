@@ -27,6 +27,10 @@ export function genomeToBot(genome: Genome) {
   return {
     meta: { name: "EvolvedBot", version: "ga" },
     act(ctx: any, obs: any) {
+      if (obs.tick < lastTick) {
+        stunCd.clear();
+        lastTick = -1;
+      }
       if (obs.tick !== lastTick) {
         lastTick = obs.tick;
         for (const [id, cd] of stunCd.entries()) {
