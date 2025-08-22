@@ -1,4 +1,5 @@
 import { act, __mem, __pMem } from './hybrid-bot';
+import { HybridState } from './lib/state';
 import { resetMicroPerf } from './micro';
 import { performance } from 'node:perf_hooks';
 
@@ -45,6 +46,7 @@ const runs = 90;
 const times: number[] = [];
 __mem.clear();
 __pMem.clear();
+const state = new HybridState();
 for (let i = 0; i < runs; i++) {
   const base = scenarios[i % scenarios.length];
   const ctx = { ...base.ctx, tick: i } as any;
@@ -58,7 +60,7 @@ for (let i = 0; i < runs; i++) {
   } as any;
   resetMicroPerf();
   const start = performance.now();
-  act(ctx, obs);
+  act(ctx, obs, state);
   times.push(performance.now() - start);
 }
 

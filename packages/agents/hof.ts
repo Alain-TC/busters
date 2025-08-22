@@ -7,8 +7,9 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as Hybrid from "./hybrid-bot";
+import { HybridState } from "./lib/state";
 
-type Bot = { meta: any; act: (ctx: any, obs: any) => any };
+type Bot = { meta: any; act: (ctx: any, obs: any, state?: HybridState) => any };
 
 function normalize(mod: any): Bot {
   const m = mod?.default ?? mod;
@@ -37,6 +38,7 @@ try {
 
 if (!cand.length) cand.push(normalize(Hybrid));
 let chosen: Bot = cand[Math.floor(Math.random() * cand.length)];
+let state: HybridState | undefined;
 
 export const candidates = cand;
 export function random() {
@@ -45,7 +47,8 @@ export function random() {
 
 export const meta = { name: `HOF(${chosen.meta?.name ?? "?"})`, ...chosen.meta };
 export function act(ctx: any, obs: any) {
-  return chosen.act(ctx, obs);
+  state ??= new HybridState(ctx?.bounds);
+  return chosen.act(ctx, obs, state);
 }
 export default { meta, act };
 

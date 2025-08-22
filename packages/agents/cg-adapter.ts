@@ -11,6 +11,7 @@ declare function readline(): string;
 declare function print(s: string): void;
 
 import { act } from "./hybrid-bot";
+import { HybridState } from "./lib/state";
 
 type Pt = { x: number; y: number };
 
@@ -27,6 +28,7 @@ const myTeamId = parseInt(readline(), 10);
 const myBase: Pt = myTeamId === 0 ? { x: 0, y: 0 } : { x: W, y: H };
 const enemyBase: Pt = myTeamId === 0 ? { x: W, y: H } : { x: 0, y: 0 };
 const ctx = { myBase, enemyBase, bounds: { w: W, h: H } };
+const state = new HybridState({ w: W, h: H });
 
 function d(a: Pt, b: Pt) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
@@ -74,7 +76,7 @@ while (true) {
 
     const obs = { self, enemies, ghostsVisible, tick };
 
-    const a = act(ctx, obs) || { type: "MOVE", x: myBase.x, y: myBase.y };
+    const a = act(ctx, obs, state) || { type: "MOVE", x: myBase.x, y: myBase.y };
     switch (a.type) {
       case "MOVE": {
         const x = Math.max(0, Math.min(W, Math.round(a.x)));

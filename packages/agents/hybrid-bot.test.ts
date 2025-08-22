@@ -11,12 +11,13 @@ test('mem resets on new match and repopulates', () => {
 
   const ctx: any = {};
   const baseObs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
-  act(ctx, baseObs);
+  const st = new HybridState();
+  act(ctx, baseObs, st);
   assert.ok(!__mem.has(99));
   assert.ok(__mem.has(1));
 
   const nextObs: any = { tick: 2, self: { id: 2, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
-  act(ctx, nextObs);
+  act(ctx, nextObs, st);
   assert.ok(__mem.has(1) && __mem.has(2));
 });
 
@@ -27,7 +28,8 @@ test('patrol indices reset on new match', () => {
 
   const ctx: any = {};
   const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
-  act(ctx, obs);
+  const st = new HybridState();
+  act(ctx, obs, st);
 
   // old entries cleared and waypoint reset to zero
   assert.equal(__pMem.get(1)?.wp, 0);
@@ -132,16 +134,17 @@ test('bot does not stun an already stunned enemy', () => {
   __mem.clear();
   const ctx: any = {};
   const self = { id: 1, x: 0, y: 0, state: 0 };
+  const st = new HybridState();
   let obs: any = { tick: 0, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
-  let action = act(ctx, obs);
+  let action = act(ctx, obs, st);
   assert.equal(action.type, 'STUN');
 
   obs = { tick: 21, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 2, range: 0, stunnedFor: 5 }], ghostsVisible: [] };
-  action = act(ctx, obs);
+  action = act(ctx, obs, st);
   assert.notEqual(action.type, 'STUN');
 
   obs = { tick: 22, self, friends: [], enemies: [{ id: 2, x: 0, y: 0, state: 0, range: 0, stunnedFor: 0 }], ghostsVisible: [] };
-  action = act(ctx, obs);
+  action = act(ctx, obs, st);
   assert.equal(action.type, 'STUN');
 });
 
@@ -165,7 +168,8 @@ test('ejects when threatened and stun on cooldown', () => {
   const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 5 };
   const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
   const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
-  const actRes = act(ctx, obs);
+  const st = new HybridState();
+  const actRes = act(ctx, obs, st);
   assert.equal(actRes.type, 'EJECT');
 });
 
@@ -175,7 +179,8 @@ test('ejects to closer ally when safe', () => {
   const self = { id: 1, x: 6000, y: 6000, state: 1, stunCd: 10 };
   const ally = { id: 3, x: 5000, y: 5000, state: 0 };
   const obs: any = { tick: 5, self, friends: [ally], enemies: [], ghostsVisible: [] };
-  const actRes = act(ctx, obs);
+  const st = new HybridState();
+  const actRes = act(ctx, obs, st);
   assert.equal(actRes.type, 'EJECT');
 });
 
@@ -185,7 +190,8 @@ test('does not eject when stun ready', () => {
   const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 0 };
   const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
   const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
-  const actRes = act(ctx, obs);
+  const st = new HybridState();
+  const actRes = act(ctx, obs, st);
   assert.notEqual(actRes.type, 'EJECT');
 });
 

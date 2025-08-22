@@ -4,7 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
-import { HybridState, getState, predictEnemyPath } from "./lib/state";
+import { HybridState, predictEnemyPath } from "./lib/state";
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -418,7 +418,7 @@ export const __buildTasks = buildTasks;
 export const __fog = fog;
 
 /** --- Main per-buster policy --- */
-export function act(ctx: Ctx, obs: Obs) {
+export function act(ctx: Ctx, obs: Obs, state: HybridState) {
   resetMicroPerf();
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
   if (tick <= 1 && tick < lastTick) {
@@ -437,7 +437,6 @@ export function act(ctx: Ctx, obs: Obs) {
     return act;
   };
   const m = M(me.id);
-  const state = getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
   state.decayGhosts();
   state.diffuseGhosts();
