@@ -48,24 +48,14 @@ function gaussian(rng: () => number) {
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
 /* ---------------- Opponent pool ---------------- */
-async function resolveOppPool(specList: string[]): Promise<Array<{name: string, bot: any}>> {
-  const mapNameToSpec = (n: string) => {
-    const k = n.trim();
-    if (k === 'greedy')  return '@busters/agents/greedy';
-    if (k === 'random')  return '@busters/agents/random';
-    if (k === 'stunner') return '@busters/agents/stunner';
-    if (k === 'camper')  return '@busters/agents/camper';
-    if (k === 'defender') return '@busters/agents/defender';
-    if (k === 'scout')    return '@busters/agents/scout';
-    if (k === 'hybrid')  return '@busters/agents/hybrid';
-    if (k === 'hof')     return '@busters/agents/hof';
-    return k; // assume direct spec
-  };
-  const out: Array<{name: string, bot: any}> = [];
-  for (const n of specList) {
-    const spec = mapNameToSpec(n);
-    const bot = await loadBotModule(spec);
-    out.push({ name: n, bot });
+export async function resolveOppPool(
+  specList: string[]
+): Promise<Array<{ name: string; bot: any }>> {
+  const out: Array<{ name: string; bot: any }> = [];
+  for (const raw of specList) {
+    const name = raw.trim();
+    const bot = await loadBotModule(name);
+    out.push({ name, bot });
   }
   return out;
 }
