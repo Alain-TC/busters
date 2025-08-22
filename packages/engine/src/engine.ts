@@ -87,10 +87,10 @@ export function initGame({
   return state;
 }
 
-function withinBase(b: {x:number;y:number}): { team: TeamId | null } {
+function withinBase(b: { x: number; y: number }): TeamId | null {
   const base0 = dist(b.x, b.y, TEAM0_BASE.x, TEAM0_BASE.y) < RULES.BASE_RADIUS ? 0 : null;
   const base1 = dist(b.x, b.y, TEAM1_BASE.x, TEAM1_BASE.y) < RULES.BASE_RADIUS ? 1 : null;
-  return { team: (base0 ?? base1) as TeamId | null };
+  return (base0 ?? base1) as TeamId | null;
 }
 
 export type ActionsByTeam = Record<TeamId, (Action | undefined)[]>; // index aligned with each team's busters order
@@ -216,7 +216,7 @@ export function handleReleases(
     }
     if (a?.type === 'RELEASE') {
       if (b.state === 1) {
-        const baseTeam = withinBase(b).team;
+        const baseTeam = withinBase(b);
         const gid = b.value as number;
         if (baseTeam !== null) {
           next.scores[baseTeam] += 1;
@@ -294,7 +294,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   const dropped = new Set<number>(); // ghostIds already materialized
   function dropCarried(b: BusterPublicState, ghostId: number | null, opts?: { forceNoScore?: boolean }) {
     if (ghostId === null || dropped.has(ghostId)) return;
-    const base = withinBase(b).team;
+    const base = withinBase(b);
     if (!opts?.forceNoScore && base !== null) {
       next.scores[base] += 1; // scoring on drop in base (attacker or victim)
       // no ghost added back to the map
