@@ -90,6 +90,7 @@ async function evalHybridVector(
         meId: 'hybrid',
         candidates: oppsAll.map(o => o.name),
         n: pfspCount,
+        rng: mulberry32(s >>> 0),
       }).map(p => p.id);
       const set = new Set(picked);
       opps = oppsAll.filter(o => set.has(o.name));
@@ -339,7 +340,7 @@ async function pfspEvalAndRefreshHOF(args: { tw: any; oppNames: string[]; seedsP
   const championPath = path.resolve(__dirname, '../../agents/champion-bot.js');
   const elo = loadEloTable(eloPath);
 
-  const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo }).map(p => p.id);
+  const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo, rng: mulberry32(12345) }).map(p => p.id);
   const opps = await resolveOppPool(picks);
   const botA = makeHybridBotFromTW(tw);
 

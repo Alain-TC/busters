@@ -17,6 +17,7 @@ export function selectOpponentsPFSP(params: {
   n?: number;
   target?: number;
   temperature?: number;
+  rng?: () => number;
 }): Opponent[] {
   const envTarget = Number(process.env.PFSP_TARGET);
   const envTemp = Number(process.env.PFSP_TEMP);
@@ -65,11 +66,13 @@ export function selectOpponentsPFSP(params: {
   const total = weights.reduce((a, b) => a + b, 0) || 1;
   const probs = weights.map((w) => w / total);
 
+  const rng = params.rng ?? Math.random;
+
   // Sample n without replacement
   const picks: Opponent[] = [];
   const used = new Set<number>();
   while (picks.length < n && used.size < probs.length) {
-    let r = Math.random();
+    let r = rng();
     let idx = -1;
     for (let i = 0; i < probs.length; i++) {
       if (used.has(i)) continue;
