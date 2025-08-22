@@ -536,6 +536,7 @@ async function main() {
     const jobs = Number(getFlag(rest, 'jobs', 1));
     const hofRefresh = Number(getFlag(rest, 'hof-refresh', 0));
     const rotateEvery = Number(getFlag(rest, 'rotate-opps', 0));
+    const champRefresh = Number(getFlag(rest, 'champ-refresh', 0));
     const telemetry = String(getFlag(rest, 'telemetry', path.join('packages/sim-runner/artifacts', 'tag_telemetry.jsonl')));
     const eloOut = String(getFlag(rest, 'elo-out', path.join('packages/sim-runner/artifacts', 'elo.json')));
     const oppPool = oppPoolArg.split(',').map((s) => ({ id: s.trim() })).filter(o => o.id);
@@ -544,6 +545,7 @@ async function main() {
       artifactsDir: 'packages/sim-runner/artifacts', jobs,
       hofRefreshInterval: hofRefresh || undefined,
       oppRotateInterval: rotateEvery || undefined,
+      championRefreshInterval: champRefresh || undefined,
       telemetryPath: telemetry,
       eloPath: eloOut,
     });
