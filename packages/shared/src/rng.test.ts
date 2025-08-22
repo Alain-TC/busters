@@ -29,10 +29,29 @@ test('mulberry32 generates a deterministic sequence', () => {
   assert.ok(Math.abs(rng() - 0.002735721180215478) < 1e-9);
 });
 
-test('gaussian draws using provided RNG', () => {
+test('gaussian draws using provided RNG and caches second value', () => {
   const vals = [0.1, 0.2];
   let i = 0;
   const rng = () => vals[i++];
-  const g = gaussian(rng);
-  assert.ok(Math.abs(g - 0.6631399714746835) < 1e-9);
+  const g1 = gaussian(rng);
+  const g2 = gaussian(rng);
+  assert.ok(Math.abs(g1 - 0.6631399714746835) < 1e-9);
+  assert.ok(Math.abs(g2 - 2.0409349730505) < 1e-9);
+  assert.equal(i, 2); // rng consumed only once for both samples
+});
+
+test('gaussian distribution has ~0 mean and unit variance', () => {
+  const rng = mulberry32(123456);
+  const n = 100000;
+  let sum = 0;
+  let sumSq = 0;
+  for (let i = 0; i < n; i++) {
+    const g = gaussian(rng);
+    sum += g;
+    sumSq += g * g;
+  }
+  const mean = sum / n;
+  const variance = sumSq / n - mean * mean;
+  assert.ok(Math.abs(mean) < 0.05);
+  assert.ok(Math.abs(variance - 1) < 0.05);
 });
