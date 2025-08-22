@@ -7,7 +7,7 @@ export function act(ctx, obs) {
     return { type: "MOVE", x: ctx.myBase.x, y: ctx.myBase.y };
   }
   const enemy = obs.enemies?.[0];
-  if (enemy && enemy.range <= 1647 && obs.self.stunCd <= 0 && (enemy.stunnedFor ?? 0) <= 0) return { type: "STUN", busterId: enemy.id };
+  if (enemy && enemy.range <= 1647 && obs.self.stunCd <= 0) return { type: "STUN", busterId: enemy.id };
   const ghost = obs.ghostsVisible?.[0];
   if (ghost) {
     if (ghost.range >= 900 && ghost.range <= 1760) return { type: "BUST", ghostId: ghost.id };
