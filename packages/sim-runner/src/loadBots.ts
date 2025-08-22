@@ -8,7 +8,7 @@ export type Bot = {
 };
 
 // Map short names -> real package export specs
-const ALIASES: Record<string, string> = {
+export const BOT_ALIASES: Record<string, string> = {
   greedy: "@busters/agents/greedy",
   stunner: "@busters/agents/stunner",
   camper: "@busters/agents/camper",
@@ -38,7 +38,7 @@ export function resolveSpec(token: string): string {
   // if already a path or scoped package, keep as-is
   if (token.startsWith("@") || token.startsWith(".") || token.startsWith("/")) return token;
   // else try alias
-  return ALIASES[token] ?? token;
+  return BOT_ALIASES[token] ?? token;
 }
 
 /** Load a bot module by spec or alias */
@@ -49,9 +49,9 @@ export async function loadBotModule(specOrAlias: string): Promise<Bot> {
     mod = await import(spec);
   } catch (e) {
     // Helpful message if the alias was not resolvable
-    const hint = ALIASES[specOrAlias]
+    const hint = BOT_ALIASES[specOrAlias]
       ? `Resolved "${specOrAlias}" -> "${spec}" but import failed. Check @busters/agents/package.json exports and file existence.`
-      : `Unknown bot token "${specOrAlias}". Try one of: ${Object.keys(ALIASES).join(", ")}, or pass a full module path.`;
+      : `Unknown bot token "${specOrAlias}". Try one of: ${Object.keys(BOT_ALIASES).join(", ")}, or pass a full module path.`;
     throw new Error(`${(e as Error).message}\n${hint}`);
   }
 

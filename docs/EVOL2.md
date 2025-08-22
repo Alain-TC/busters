@@ -231,6 +231,7 @@ def assign_greedy_improved(scores, spacing_penalty) {
 
 ## Training Flow (`packages/sim-runner`)
 The `sim-runner` package drives evolutionary training and evaluation.
+Available bot aliases are centralized in `packages/sim-runner/src/loadBots.ts` as `BOT_ALIASES`.
 
 ### CEM Training
 ```bash
