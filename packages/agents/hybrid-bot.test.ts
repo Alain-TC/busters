@@ -7,7 +7,7 @@ import { hungarian } from './hungarian';
 
 test('mem resets on new match and repopulates', () => {
   // pre-populate with stale entry
-  __mem.set(99, { stunReadyAt: 5, radarUsed: true, wp: 1 });
+  __mem.set(99, { stunReadyAt: 5, radarUsed: true });
 
   const ctx: any = {};
   const baseObs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
