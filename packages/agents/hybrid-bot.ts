@@ -96,7 +96,11 @@ type Obs = {
 /** Memory per buster */
 const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
 export const __mem = mem; // exposed for tests
+/** tiny patrol memory for exploration */
+const pMem = new Map<number, { wp: number }>();
+export const __pMem = pMem; // exposed for tests
 function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
+function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 let lastTick = Infinity;
 
 /** ---- Auction / Task machinery ---- */
@@ -106,6 +110,54 @@ type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 /** Shared per-tick plan cache (computed once, read by all) */
 let planTick = -1;
 let planAssign = new Map<number, Task>(); // busterId -> task
+
+// Lifecycle tracking for per-buster memory
+const activeIds = new Set<number>();
+let lifecycleTick = -1;
+
+export function resetHybridMemory() {
+  mem.clear();
+  pMem.clear();
+  planTick = -1;
+  planAssign.clear();
+  fog.reset();
+  activeIds.clear();
+  lifecycleTick = -1;
+  lastTick = Infinity;
+}
+
+export type HybridMemory = {
+  mem: [number, { stunReadyAt: number; radarUsed: boolean }][];
+  pMem: [number, { wp: number }][];
+};
+
+export function serializeHybridMemory(): HybridMemory {
+  return {
+    mem: Array.from(mem.entries()),
+    pMem: Array.from(pMem.entries()),
+  };
+}
+
+export function loadHybridMemory(data: HybridMemory) {
+  resetHybridMemory();
+  for (const [id, m] of data.mem) mem.set(id, m);
+  for (const [id, m] of data.pMem) pMem.set(id, m);
+}
+
+function beginLifecycle(tick: number) {
+  if (tick !== lifecycleTick) {
+    if (lifecycleTick !== -1) {
+      for (const id of Array.from(mem.keys())) {
+        if (!activeIds.has(id)) {
+          mem.delete(id);
+          pMem.delete(id);
+        }
+      }
+    }
+    activeIds.clear();
+    lifecycleTick = tick;
+  }
+}
 
 function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
   const tasks: Task[] = [];
@@ -228,11 +280,6 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
   return tasks;
 }
-
-/** tiny patrol memory for exploration */
-const pMem = new Map<number, { wp: number }>();
-export const __pMem = pMem; // exposed for tests
-function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
 function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, state: HybridState): number {
@@ -874,14 +921,12 @@ export function act(ctx: Ctx, obs: Obs) {
   resetMicroPerf();
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
   if (tick <= 1 && tick < lastTick) {
-    mem.clear();
-    pMem.clear();
-    planTick = -1;
-    planAssign.clear();
-    fog.reset();
+    resetHybridMemory();
   }
+  beginLifecycle(tick);
   lastTick = tick;
   const me = obs.self;
+  activeIds.add(me.id);
   const m = M(me.id);
   const finish = <T extends { type?: string }>(act: T) => {
     if ((act as any)?.type === "STUN") {

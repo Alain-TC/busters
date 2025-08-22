@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog, buildPlan, executePlan } from './hybrid-bot';
+import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog, buildPlan, executePlan, resetHybridMemory, serializeHybridMemory, loadHybridMemory } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -33,6 +33,45 @@ test('patrol indices reset on new match', () => {
   // old entries cleared and waypoint reset to zero
   assert.equal(__pMem.get(1)?.wp, 0);
   assert.ok(!__pMem.has(99));
+});
+
+test('mem entries removed when busters disappear', () => {
+  const ctx: any = {};
+  const obs1: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [{ id: 2, x: 0, y: 0, state: 0 }], enemies: [], ghostsVisible: [] };
+  act(ctx, obs1);
+  const obs2: any = { tick: 0, self: { id: 2, x: 0, y: 0, state: 0 }, friends: [{ id: 1, x: 0, y: 0, state: 0 }], enemies: [], ghostsVisible: [] };
+  act(ctx, obs2);
+  assert.ok(__mem.has(1) && __mem.has(2));
+
+  // only buster 1 acts on tick 1
+  const obs3: any = { tick: 1, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  act(ctx, obs3);
+  assert.ok(__mem.has(1) && __mem.has(2));
+
+  // next tick triggers cleanup for missing buster
+  const obs4: any = { tick: 2, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  act(ctx, obs4);
+  assert.ok(__mem.has(1));
+  assert.ok(!__mem.has(2));
+});
+
+test('memory can be serialized, reset, and restored', () => {
+  resetHybridMemory();
+  const ctx: any = {};
+  const obs: any = { tick: 0, self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] };
+  act(ctx, obs);
+  __pMem.set(5, { wp: 1 });
+  const snap = serializeHybridMemory();
+  assert.ok(snap.mem.some(([id]) => id === 1));
+  assert.ok(snap.pMem.some(([id]) => id === 5));
+
+  resetHybridMemory();
+  assert.equal(__mem.size, 0);
+  assert.equal(__pMem.size, 0);
+
+  loadHybridMemory(snap);
+  assert.ok(__mem.has(1));
+  assert.ok(__pMem.has(5));
 });
 
 test('ghost probability map normalizes, diffuses, and clears seen areas', () => {
