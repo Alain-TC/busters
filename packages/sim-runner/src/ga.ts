@@ -210,29 +210,32 @@ function shuffleDet<T>(arr: T[], seed: number): T[] {
   return a;
 }
 
-// Refresh HOF genomes from latest tournament standings file
+// Refresh HOF genomes from persistent directory
 function refreshHallOfFame(artDir: string) {
-  const tourPath = path.resolve(process.cwd(), artDir, 'tournament_standings.json');
-  if (!fs.existsSync(tourPath)) return;
+  const dir = path.resolve(process.cwd(), artDir, 'hof');
+  const file = path.join(dir, 'hof_genomes.json');
+  if (!fs.existsSync(file)) return;
   try {
-    const data = JSON.parse(fs.readFileSync(tourPath, 'utf-8'));
-    const ranked: string[] = Array.isArray(data?.ranked) ? data.ranked : [];
-    const genomes: Genome[] = [];
-    for (const id of ranked) {
-      if (typeof id === 'string' && id.startsWith('hof:')) {
-        const parts = id.slice(4).split(',').map((n: string) => Number(n));
-        if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
-          genomes.push({ radarTurn: parts[0], stunRange: parts[1], releaseDist: parts[2] });
-        }
-      }
-    }
-    if (genomes.length) {
+    const genomes = JSON.parse(fs.readFileSync(file, 'utf-8')) as Genome[];
+    if (Array.isArray(genomes) && genomes.length) {
       HOF.length = 0;
       HOF.push(...genomes);
-      console.log(`Refreshed HOF with ${genomes.length} entries from tournament.`);
+      console.log(`Refreshed HOF with ${genomes.length} entries from disk.`);
     }
   } catch (e) {
     console.warn('Failed to refresh HOF:', e);
+  }
+}
+
+// Persist current HOF genomes
+function exportHallOfFame(artDir: string) {
+  const dir = path.resolve(process.cwd(), artDir, 'hof');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'hof_genomes.json');
+    fs.writeFileSync(file, JSON.stringify(HOF, null, 2));
+  } catch (e) {
+    console.warn('Failed to export HOF:', e);
   }
 }
 
@@ -465,6 +468,7 @@ export async function trainCEM(opts: CEMOpts) {
   fs.mkdirSync(artDir, { recursive: true });
 
   HOF.length = 0; // reset HoF
+  refreshHallOfFame(opts.artifactsDir);
   const eloFile = path.resolve(process.cwd(), opts.eloPath || path.join(opts.artifactsDir, 'elo.json'));
   const elo = loadElo(eloFile); // persisted across runs
 
@@ -531,6 +535,7 @@ export async function trainCEM(opts: CEMOpts) {
 
     HOF.push(genBest);
     while (HOF.length > opts.hofSize) HOF.shift();
+    exportHallOfFame(opts.artifactsDir);
 
     const elitesCount = Math.max(1, Math.round(opts.pop * elitePct));
     const eliteVecs = idx.slice(0, elitesCount).map(i => {
