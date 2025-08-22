@@ -4,10 +4,26 @@
 import { RULES } from "@busters/shared";
 import { performance } from "perf_hooks";
 
-export const microPerf = { twoTurnMs: 0, twoTurnCalls: 0 };
+export const microPerf = {
+  twoTurnMs: 0,
+  twoTurnCalls: 0,
+  interceptMs: 0,
+  interceptCalls: 0,
+  ejectMs: 0,
+  ejectCalls: 0,
+};
 export const MICRO_BUDGET_MS = 0.5;
-export function resetMicroPerf() { microPerf.twoTurnMs = 0; microPerf.twoTurnCalls = 0; }
-export function microOverBudget() { return microPerf.twoTurnMs > MICRO_BUDGET_MS; }
+export function resetMicroPerf() {
+  microPerf.twoTurnMs = 0;
+  microPerf.twoTurnCalls = 0;
+  microPerf.interceptMs = 0;
+  microPerf.interceptCalls = 0;
+  microPerf.ejectMs = 0;
+  microPerf.ejectCalls = 0;
+}
+export function microOverBudget() {
+  return microPerf.twoTurnMs + microPerf.interceptMs + microPerf.ejectMs > MICRO_BUDGET_MS;
+}
 
 const SPEED = RULES.MOVE_SPEED; // buster speed per turn
 
@@ -123,6 +139,36 @@ export function twoTurnContestDelta(opts: {
   return delta;
 }
 
+/** Advantage of beating an enemy to an intercept point along its path to my base. */
+export function interceptDelta(opts: { me: Ent; enemy: Ent; myBase: Pt }) {
+  const { me, enemy, myBase } = opts;
+  const P = estimateInterceptPoint(me, enemy, myBase);
+  const tMe = dist(me.x, me.y, P.x, P.y) / SPEED;
+  const tEn = dist(enemy.x, enemy.y, P.x, P.y) / SPEED;
+  return (tEn - tMe) * 0.2;
+}
+
+/** Two-turn lookahead variant for intercepting an enemy carrier. */
+export function twoTurnInterceptDelta(opts: {
+  me: Ent;
+  enemy: Ent;
+  myBase: Pt;
+  stunRange: number;
+  canStunMe: boolean;
+  canStunEnemy: boolean;
+}) {
+  const t0 = performance.now();
+  const { me, enemy, myBase, stunRange, canStunMe, canStunEnemy } = opts;
+  const P = estimateInterceptPoint(me, enemy, myBase);
+  const me1 = step(me, P);
+  const enemy1 = step(enemy, myBase);
+  let delta = interceptDelta({ me: me1, enemy: enemy1, myBase });
+  delta += duelStunDelta({ me: me1, enemy: enemy1, canStunMe, canStunEnemy, stunRange });
+  microPerf.interceptMs += performance.now() - t0;
+  microPerf.interceptCalls++;
+  return delta;
+}
+
 /** Value for blocking an enemy carrier before they can RELEASE near my base. */
 export function releaseBlockDelta(opts: {
   blocker: Ent; carrier: Ent; myBase: Pt; stunRange: number;
@@ -171,6 +217,27 @@ export function ejectDelta(opts: { me: Ent; target: Pt; myBase: Pt; ally?: Ent }
     const allyTo = dist(ally.x, ally.y, target.x, target.y);
     if (allyTo < meTo) delta += 0.25;
   }
+  return delta;
+}
+
+/** Two-turn lookahead for ejecting a ghost and checking enemy interception risk. */
+export function twoTurnEjectDelta(opts: {
+  me: Ent;
+  enemy: Ent;
+  target: Pt;
+  myBase: Pt;
+  stunRange: number;
+  canStunEnemy: boolean;
+}) {
+  const t0 = performance.now();
+  const { me, enemy, target, myBase, stunRange, canStunEnemy } = opts;
+  const me1 = step(me, target);
+  const enemy1 = step(enemy, target);
+  let delta = ejectDelta({ me: me1, target, myBase });
+  const r = dist(enemy1.x, enemy1.y, target.x, target.y);
+  if (r <= stunRange && canStunEnemy) delta -= 0.5;
+  microPerf.ejectMs += performance.now() - t0;
+  microPerf.ejectCalls++;
   return delta;
 }
 
