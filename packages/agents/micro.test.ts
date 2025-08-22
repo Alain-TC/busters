@@ -166,8 +166,7 @@ test('micro rollouts cache and stay under budget', () => {
   const enemy = { id: 2, x: 3000, y: 0 };
   const ghost = { x: 1000, y: 0 };
   const myBase = { x: 0, y: 0 };
-
-  const cOpts = {
+  const baseContest = {
     me,
     enemy,
     ghost,
@@ -176,37 +175,58 @@ test('micro rollouts cache and stay under budget', () => {
     stunRange: STUN,
     canStunMe: true,
     canStunEnemy: true,
-  };
-  const firstC = twoTurnContestDelta(cOpts);
+  } as const;
+  const firstC = twoTurnContestDelta({ ...baseContest, me: { ...me }, enemy: { ...enemy }, ghost: { ...ghost } });
+  const contestMs = microPerf.twoTurnMs;
   for (let i = 0; i < 5; i++) {
-    assert.equal(twoTurnContestDelta(cOpts), firstC);
+    const opts = { ...baseContest, me: { ...me }, enemy: { ...enemy }, ghost: { ...ghost } };
+    assert.equal(twoTurnContestDelta(opts), firstC);
   }
+  assert.equal(microPerf.twoTurnMs, contestMs);
 
-  const iOpts = {
+  const baseIntercept = {
     me,
     enemy,
     myBase,
     stunRange: STUN,
     canStunMe: true,
     canStunEnemy: true,
-  };
-  const firstI = twoTurnInterceptDelta(iOpts);
+  } as const;
+  const firstI = twoTurnInterceptDelta({ ...baseIntercept, me: { ...me }, enemy: { ...enemy }, myBase: { ...myBase } });
+  const interceptMs = microPerf.interceptMs;
   for (let i = 0; i < 5; i++) {
-    assert.equal(twoTurnInterceptDelta(iOpts), firstI);
+    const opts = { ...baseIntercept, me: { ...me }, enemy: { ...enemy }, myBase: { ...myBase } };
+    assert.equal(twoTurnInterceptDelta(opts), firstI);
   }
+  assert.equal(microPerf.interceptMs, interceptMs);
 
-  const eOpts = {
+  const baseEject = {
     me,
     enemy,
     target: { x: 800, y: 0 },
     myBase,
     stunRange: STUN,
     canStunEnemy: true,
-  };
-  const firstE = twoTurnEjectDelta(eOpts);
+  } as const;
+  const firstE = twoTurnEjectDelta({
+    ...baseEject,
+    me: { ...me },
+    enemy: { ...enemy },
+    target: { x: 800, y: 0 },
+    myBase: { ...myBase },
+  });
+  const ejectMs = microPerf.ejectMs;
   for (let i = 0; i < 5; i++) {
-    assert.equal(twoTurnEjectDelta(eOpts), firstE);
+    const opts = {
+      ...baseEject,
+      me: { ...me },
+      enemy: { ...enemy },
+      target: { x: 800, y: 0 },
+      myBase: { ...myBase },
+    };
+    assert.equal(twoTurnEjectDelta(opts), firstE);
   }
+  assert.equal(microPerf.ejectMs, ejectMs);
 
   assert.ok(!microOverBudget());
 });

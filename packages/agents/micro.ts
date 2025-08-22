@@ -34,6 +34,10 @@ const twoTurnContestCache = new Map<string, number>();
 const twoTurnInterceptCache = new Map<string, number>();
 const twoTurnEjectCache = new Map<string, number>();
 
+function cacheKey(...nums: number[]): string {
+  return nums.join('|');
+}
+
 const SPEED = RULES.MOVE_SPEED; // buster speed per turn
 const ENEMY_NEAR_RADIUS = RULES.VISION;
 
@@ -126,11 +130,24 @@ export function twoTurnContestDelta(opts: {
 }) {
   microPerf.twoTurnCalls++;
   if (microOverBudget()) return 0;
-  const key = JSON.stringify(opts);
+  const { me, enemy, ghost, bustMin, bustMax, stunRange, canStunMe, canStunEnemy } = opts;
+  const key = cacheKey(
+    me.x,
+    me.y,
+    enemy.x,
+    enemy.y,
+    ghost ? 1 : 0,
+    ghost?.x ?? 0,
+    ghost?.y ?? 0,
+    bustMin,
+    bustMax,
+    stunRange,
+    canStunMe ? 1 : 0,
+    canStunEnemy ? 1 : 0,
+  );
   const cached = twoTurnContestCache.get(key);
   if (cached !== undefined) return cached;
   const t0 = performance.now();
-  const { me, enemy, ghost, bustMin, bustMax, stunRange, canStunMe, canStunEnemy } = opts;
   const me1 = step(me, ghost ?? enemy);
   const enemy1 = step(enemy, ghost ?? me);
   let delta = duelStunDelta({
@@ -177,11 +194,21 @@ export function twoTurnInterceptDelta(opts: {
 }) {
   microPerf.interceptCalls++;
   if (microOverBudget()) return 0;
-  const key = JSON.stringify(opts);
+  const { me, enemy, myBase, stunRange, canStunMe, canStunEnemy } = opts;
+  const key = cacheKey(
+    me.x,
+    me.y,
+    enemy.x,
+    enemy.y,
+    myBase.x,
+    myBase.y,
+    stunRange,
+    canStunMe ? 1 : 0,
+    canStunEnemy ? 1 : 0,
+  );
   const cached = twoTurnInterceptCache.get(key);
   if (cached !== undefined) return cached;
   const t0 = performance.now();
-  const { me, enemy, myBase, stunRange, canStunMe, canStunEnemy } = opts;
   const P = estimateInterceptPoint(me, enemy, myBase);
   const me1 = step(me, P);
   const enemy1 = step(enemy, myBase);
@@ -256,11 +283,22 @@ export function twoTurnEjectDelta(opts: {
 }) {
   microPerf.ejectCalls++;
   if (microOverBudget()) return 0;
-  const key = JSON.stringify(opts);
+  const { me, enemy, target, myBase, stunRange, canStunEnemy } = opts;
+  const key = cacheKey(
+    me.x,
+    me.y,
+    enemy.x,
+    enemy.y,
+    target.x,
+    target.y,
+    myBase.x,
+    myBase.y,
+    stunRange,
+    canStunEnemy ? 1 : 0,
+  );
   const cached = twoTurnEjectCache.get(key);
   if (cached !== undefined) return cached;
   const t0 = performance.now();
-  const { me, enemy, target, myBase, stunRange, canStunEnemy } = opts;
   const me1 = step(me, target);
   const enemy1 = step(enemy, target);
   let delta = ejectDelta({ me: me1, target, myBase });
