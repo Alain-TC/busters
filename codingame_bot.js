@@ -101,10 +101,14 @@ while (true) {
       continue;
     }
 
-    // Try STUN if off CD and enemy in range
+    // Try STUN if off CD and enemy in range, skipping already stunned targets
     if (cd <= 0 && enemies.length > 0) {
       const ne = nearest(enemies, me.x, me.y);
-      if (ne && ne.d <= Math.min(GENOME.stunRange, STUN_MAX_RANGE)) {
+      if (
+        ne &&
+        ne.d <= Math.min(GENOME.stunRange, STUN_MAX_RANGE) &&
+        ne.it.state !== 2 // avoid wasting STUN on already stunned enemy
+      ) {
         stunCd.set(me.id, STUN_CD_TURNS);
         out.push(`STUN ${ne.it.id} stun!`);
         continue;
