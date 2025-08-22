@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HybridState, predictEnemyPath, type EnemySeen } from './lib/state';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 test('trackEnemies records velocity and last two positions', () => {
   const st = new HybridState();
@@ -74,5 +78,43 @@ test('updateCorridors tracks unseen carrier path and decays', () => {
   st.decayCorridors();
   const after = st.corridorProbAt(p);
   assert.ok(after < before);
+});
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, '..', '..');
+const botFile = path.join(root, 'codingame_bot.js');
+
+test('codingame bot sends carrier home', () => {
+  const code = fs.readFileSync(botFile, 'utf8');
+  const cases: [number, string, string][] = [
+    [0, '0 3000 3000 0 1 0', 'MOVE 0 0'],
+    [1, '0 13000 6000 1 1 0', 'MOVE 16000 9000']
+  ];
+
+  for (const [teamId, entityLine, expected] of cases) {
+    const inputs = [
+      '1', // busters per player
+      '0', // ghost count
+      String(teamId),
+      '1', // one visible entity
+      entityLine
+    ];
+    const outputs: string[] = [];
+    const sandbox = {
+      readline: () => inputs.shift(),
+      console: {
+        log: (s: string) => {
+          outputs.push(String(s));
+          throw new Error('stop');
+        }
+      }
+    };
+    try {
+      vm.runInNewContext(code, sandbox);
+    } catch {
+      // Expected stop after first output
+    }
+    assert.ok(outputs[0].startsWith(expected), `team ${teamId} should output ${expected}`);
+  }
 });
 
