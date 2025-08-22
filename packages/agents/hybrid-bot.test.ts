@@ -107,3 +107,27 @@ test('bot does not stun an already stunned enemy', () => {
   action = act(ctx, obs);
   assert.equal(action.type, 'STUN');
 });
+
+test('carrying buster receives CARRY task', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const obs: any = { tick: 0, self: { id: 1, x: 8000, y: 4500, state: 1 }, friends: [], enemies: [], ghostsVisible: [] };
+  const action: any = act(ctx, obs);
+  assert.equal(action.type, 'MOVE');
+  assert.equal(action.__dbg?.tag, 'MOVE_CARRY');
+});
+
+test('carrier can switch to intercept task', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const obs: any = {
+    tick: 1,
+    self: { id: 1, x: 2000, y: 1500, state: 1 },
+    friends: [],
+    enemies: [{ id: 2, x: 2100, y: 1600, state: 1 }],
+    ghostsVisible: [],
+  };
+  const action: any = act(ctx, obs);
+  assert.equal(action.type, 'STUN');
+  assert.equal(action.__dbg?.tag, 'STUN');
+});

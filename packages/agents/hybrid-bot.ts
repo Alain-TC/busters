@@ -102,7 +102,7 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 }
 
 /** ---- Auction / Task machinery ---- */
-type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
+type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "CARRY";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
 /** Shared per-tick plan cache (computed once, read by all) */
@@ -120,6 +120,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   const tasks: Task[] = [];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
+  const team = uniqTeam(meObs.self, meObs.friends);
 
   // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
@@ -154,6 +155,16 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     tasks.push({ type: "DEFEND", target: { x: tx, y: ty }, payload: { enemyId: nearThreat.id }, baseScore: WEIGHTS.DEFEND_BASE + WEIGHTS.DEFEND_NEAR_BONUS });
   }
 
+  // CARRY carriers back home
+  for (const mate of team) {
+    if (mate.state === 1) {
+      const tx = Math.round((mate.x + MY.x) / 2);
+      const ty = Math.round((mate.y + MY.y) / 2);
+      const risk = (enemies.filter(e => dist(e.x, e.y, mate.x, mate.y) <= 2200).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
+      tasks.push({ type: "CARRY", target: { x: tx, y: ty }, payload: { id: mate.id }, baseScore: WEIGHTS.CARRY_BASE - risk });
+    }
+  }
+
   // BUST visible ghosts
   for (const g of ghosts) {
     const r = g.range ?? dist(meObs.self.x, meObs.self.y, g.x, g.y);
@@ -168,7 +179,6 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   }
 
   // EXPLORE: coarse frontier via shared state (fallback to patrols)
-  const team = uniqTeam(meObs.self, meObs.friends);
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
@@ -241,6 +251,13 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
   if (t.type === "DEFEND") {
     const near = enemies.filter(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS).length;
     s += near * 1.5;
+  }
+  if (t.type === "CARRY") {
+    const dHome = dist(b.x, b.y, MY.x, MY.y);
+    s = t.baseScore - dHome * WEIGHTS.DIST_PEN;
+    for (const e of enemies) {
+      s -= releaseBlockDelta({ blocker: e, carrier: b, myBase: MY, stunRange: TUNE.STUN_RANGE });
+    }
   }
   return s;
 }
@@ -342,8 +359,6 @@ export function act(ctx: Ctx, obs: Obs) {
     if (dHome <= TUNE.RELEASE_DIST) {
       return dbg({ type: "RELEASE" }, "RELEASE", "at_base");
     }
-    const home = spacedTarget(me, MY, friends);
-    return dbg({ type: "MOVE", x: home.x, y: home.y }, "CARRY_HOME", "carrying");
   }
 
   // Stun priority: enemy carrier in range, else nearest in bust range
@@ -396,6 +411,49 @@ export function act(ctx: Ctx, obs: Obs) {
 
   if (myTask) {
     const candidates: { act: any; base: number; deltas: number[]; tag: string; reason?: string }[] = [];
+
+    if (myTask.type === "CARRY") {
+      const dHome = dist(me.x, me.y, MY.x, MY.y);
+      if (dHome <= TUNE.RELEASE_DIST) {
+        candidates.push({ act: { type: "RELEASE" }, base: 120, deltas: [], tag: "RELEASE", reason: "carry" });
+      }
+      const center = myTask.target;
+      const radius = 400;
+      for (let i = 0; i < 6; i++) {
+        const ang = (Math.PI * 2 * i) / 6;
+        const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
+        const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
+        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const sim = { id: me.id, x: P.x, y: P.y } as Ent;
+        let delta = 0;
+        for (const enemy of enemiesAll) {
+          delta += -releaseBlockDelta({ blocker: enemy, carrier: sim, myBase: MY, stunRange: TUNE.STUN_RANGE });
+        }
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [delta], tag: "MOVE_CARRY", reason: `a${i}` });
+      }
+      const home = spacedTarget(me, MY, friends);
+      let deltaHome = 0;
+      const simHome = { id: me.id, x: home.x, y: home.y } as Ent;
+      for (const enemy of enemiesAll) {
+        deltaHome += -releaseBlockDelta({ blocker: enemy, carrier: simHome, myBase: MY, stunRange: TUNE.STUN_RANGE });
+      }
+      const baseHome = 100 - dist(me.x, me.y, home.x, home.y) * 0.01;
+      candidates.push({ act: { type: "MOVE", x: home.x, y: home.y }, base: baseHome, deltas: [deltaHome], tag: "MOVE_CARRY", reason: "home" });
+      if (canStun) {
+        const enemy = enemiesAll.find(e => (e.range ?? dist(me.x, me.y, e.x, e.y)) <= TUNE.STUN_RANGE);
+        if (enemy) {
+          const delta = duelStunDelta({
+            me,
+            enemy,
+            canStunMe: true,
+            canStunEnemy: enemy.state !== 2,
+            stunRange: TUNE.STUN_RANGE,
+          });
+          candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "carry_threat" });
+        }
+      }
+    }
 
     if (myTask.type === "BUST" && ghosts.length) {
       const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];

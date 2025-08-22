@@ -27,6 +27,7 @@ export type Weights = {
   DEFEND_NEAR_BONUS: number;    // extra bonus if threat near base
   BLOCK_BASE: number;           // base utility for blocker tasks
   EXPLORE_BASE: number;         // base utility for explore tasks
+  CARRY_BASE: number;           // base utility for carry tasks
   DIST_PEN: number;             // generic distance penalty
 };
 
@@ -55,6 +56,7 @@ export const WEIGHTS: Weights = {
   DEFEND_NEAR_BONUS: 4,
   BLOCK_BASE: 5,
   EXPLORE_BASE: 3,
+  CARRY_BASE: 14,
   DIST_PEN: 0.0024519620026867764,
 };
 
