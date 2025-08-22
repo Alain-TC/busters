@@ -57,12 +57,12 @@ while (true) {
       x: me.x, y: me.y,
       stunCd: me.value,                // CG uses `value` for stun cooldown / stun time; good enough for gating STUN
       radarUsed: radarUsed.has(me.id), // we maintain locally
-      carrying: me.state === 1 ? {} : undefined
+      carrying: me.state === 1 ? me.value : undefined
     };
 
     const enemies = opp.map((e) => ({
       id: e.id, x: e.x, y: e.y,
-      carrying: e.state === 1 ? {} : undefined,
+      carrying: e.state === 1 ? e.value : undefined,
       range: d(self, e)
     }));
 

@@ -74,7 +74,16 @@ type Ctx = {
   bustersPerPlayer?: number;
 };
 
-type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number; stunnedFor?: number };
+type Ent = {
+  id: number;
+  x: number;
+  y: number;
+  range?: number;
+  state?: number;
+  value?: number;
+  carrying?: number | undefined;
+  stunnedFor?: number;
+};
 
 type Obs = {
   tick: number;

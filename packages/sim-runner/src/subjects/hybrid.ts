@@ -41,7 +41,15 @@ const ORDER_IDX = ORDER.reduce<Record<string, number>>((acc, key, idx) => {
 }, {});
 
 type Pt = { x: number; y: number };
-type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number };
+type Ent = {
+  id: number;
+  x: number;
+  y: number;
+  range?: number;
+  state?: number;
+  value?: number;
+  carrying?: number | undefined;
+};
 
 type Ctx = {
   tick: number;
