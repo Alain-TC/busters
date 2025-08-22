@@ -208,3 +208,18 @@ test('buildTasks uses predicted path for unseen carriers', () => {
   assert.ok(intercepts.some(t => t.target.x === 500 && t.target.y === 500));
   assert.ok(intercepts.length >= 2);
 });
+
+test('buildTasks skips SUPPORT for enemies stunned for several ticks', () => {
+  __mem.clear();
+  const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const self: any = { id: 1, x: 0, y: 0, state: 0 };
+  const enemy: any = { id: 2, x: 0, y: 0, state: 0, range: 0 };
+  const st = new HybridState();
+  st.updateRoles([self]);
+  let tasks = __buildTasks(ctx, { tick: 0, self, friends: [], enemies: [enemy], ghostsVisible: [] }, st, ctx.myBase, ctx.enemyBase);
+  assert.ok(tasks.some(t => t.type === 'SUPPORT' && t.payload?.enemyId === 2));
+
+  const stunned: any = { id: 2, x: 0, y: 0, state: 2, range: 0, stunnedFor: 5 };
+  tasks = __buildTasks(ctx, { tick: 0, self, friends: [], enemies: [stunned], ghostsVisible: [] }, st, ctx.myBase, ctx.enemyBase);
+  assert.ok(!tasks.some(t => t.type === 'SUPPORT' && t.payload?.enemyId === 2));
+});

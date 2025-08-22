@@ -192,7 +192,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   for (const e of enemies) {
     const alliesNear = team.filter(f => f.id !== e.id && dist(f.x, f.y, e.x, e.y) <= TUNE.STUN_RANGE);
     const ready = alliesNear.some(a => M(a.id).stunReadyAt <= tick);
-    if (alliesNear.length && ready) {
+    if (alliesNear.length && ready && (e.state !== 2 || (e.stunnedFor ?? 0) <= 2)) {
       tasks.push({
         type: "SUPPORT",
         target: { x: e.x, y: e.y },
