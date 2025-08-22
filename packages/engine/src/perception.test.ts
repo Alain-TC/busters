@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame } from './engine';
 import { observationsForTeam, entitiesForTeam } from './perception';
-import { RULES } from '@busters/shared';
+import { RULES, BusterState } from '@busters/shared';
 
 test('radar vision reveals distant entities', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 1 });
@@ -80,8 +80,8 @@ test('enemy stun cooldown is hidden', () => {
   enemy.stunCd = 7;
 
   // Neither buster is carrying, stunned or busting
-  me.state = 0;
-  enemy.state = 0;
+  me.state = BusterState.Idle;
+  enemy.state = BusterState.Idle;
 
   const list = entitiesForTeam(state, 0);
   const myEntity = list.find(e => e.id === me.id)!;

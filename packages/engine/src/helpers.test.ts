@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, collectIntents, applyMoves, resolveStuns, handleReleases, ActionsByTeam } from './engine';
-import { RULES, TEAM0_BASE } from '@busters/shared';
+import { RULES, TEAM0_BASE, BusterState } from '@busters/shared';
 
 test('collectIntents ignores stunned busters and clamps MOVE', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
@@ -10,7 +10,7 @@ test('collectIntents ignores stunned busters and clamps MOVE', () => {
   next.busters.forEach(b => byTeam[b.teamId].push(b));
   const b0 = next.busters[0];
   const b1 = next.busters.find(b => b.teamId === 1)!;
-  b1.state = 2; // stunned
+  b1.state = BusterState.Stunned; // stunned
   const actions: ActionsByTeam = {
     0: [{ type: 'MOVE', x: next.width + 100, y: next.height + 100 }],
     1: [{ type: 'MOVE', x: 0, y: 0 }],
@@ -59,7 +59,7 @@ test('resolveStuns stuns target and drops carried ghost', () => {
   victim.x = attacker.x + RULES.STUN_RANGE - 1; victim.y = attacker.y;
   const ghost = next.ghosts[0];
   next.ghosts = [];
-  victim.state = 1; victim.value = ghost.id;
+  victim.state = BusterState.Carrying; victim.value = ghost.id;
   const startCarry = new Map<number, number | null>([
     [attacker.id, null],
     [victim.id, ghost.id],
@@ -73,7 +73,7 @@ test('resolveStuns stuns target and drops carried ghost', () => {
     [attacker.id, { type: 'STUN', busterId: victim.id }],
   ]);
   resolveStuns(next, intents as any, startCarry, busterById, dropCarried);
-  assert.equal(busterById.get(victim.id)!.state, 2);
+  assert.equal(busterById.get(victim.id)!.state, BusterState.Stunned);
   assert.equal(dropped[0], ghost.id);
 });
 
@@ -83,10 +83,10 @@ test('handleReleases scores when releasing in base', () => {
   const b = next.busters[0];
   const ghost = { id: 0, x: 0, y: 0, endurance: 0, engagedBy: 0 };
   const ghostById = new Map<number, any>([[ghost.id, ghost]]);
-  b.state = 1; b.value = ghost.id; b.x = TEAM0_BASE.x; b.y = TEAM0_BASE.y;
+  b.state = BusterState.Carrying; b.value = ghost.id; b.x = TEAM0_BASE.x; b.y = TEAM0_BASE.y;
   const intents = new Map<number, any>([[b.id, { type: 'RELEASE' }]]);
   handleReleases(next as any, intents as any, ghostById as any);
   assert.equal(next.scores[0], 1);
-  assert.equal(b.state, 0);
+  assert.equal(b.state, BusterState.Idle);
 });
 

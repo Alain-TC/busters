@@ -1,5 +1,12 @@
 export type TeamId = 0 | 1;
 
+export enum BusterState {
+  Idle = 0,
+  Carrying = 1,
+  Stunned = 2,
+  Busting = 3,
+}
+
 export type Action =
   | { type: 'MOVE'; x: number; y: number }
   | { type: 'BUST'; ghostId: number }
@@ -14,8 +21,7 @@ export type BusterPublicState = {
   teamId: TeamId;
   x: number;
   y: number;
-  // state: 0 none, 1 carrying, 2 stunned, 3 busting
-  state: 0 | 1 | 2 | 3;
+  state: BusterState;
   value: number; // ghostId if carrying, or stun ticks remaining if stunned, or target ghost id when busting
   stunCd: number; // cooldown until can stun again
   radarUsed: boolean;

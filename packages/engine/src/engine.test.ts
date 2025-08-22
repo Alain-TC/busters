@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initGame, step, ActionsByTeam } from './engine';
-import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES, dist } from '@busters/shared';
+import { MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE, RULES, dist, BusterState } from '@busters/shared';
 
 test('initGame sets up teams and ghosts within bounds', () => {
   const state = initGame({ seed: 1, bustersPerPlayer: 2, ghostCount: 3 });
@@ -102,7 +102,7 @@ test('step captures ghost when endurance drops to zero', () => {
   const next = step(state, actions);
   const carrier = next.busters[0];
   assert.equal(next.ghosts.length, 0);
-  assert.equal(carrier.state, 1);
+  assert.equal(carrier.state, BusterState.Carrying);
   assert.equal(carrier.value, ghost.id);
 });
 
@@ -117,7 +117,7 @@ test('busters cannot bust at boundary distances', () => {
     const bNext = next.busters[0];
     assert.equal(next.ghosts.length, 1);
     assert.equal(next.ghosts[0].endurance, 1);
-    assert.equal(bNext.state, 0);
+    assert.equal(bNext.state, BusterState.Idle);
   };
   attempt(RULES.BUST_MIN);
   attempt(RULES.BUST_MAX);
@@ -139,7 +139,7 @@ const bEnd = end.busters[0];
 assert.equal(end.scores[0], 1);
 assert.equal(mid.scores[0], 0);
 assert.equal(state.scores[0], 0);
-assert.equal(bEnd.state, 0);
+assert.equal(bEnd.state, BusterState.Idle);
 assert.equal(bEnd.value, 0);
 });
 
@@ -160,7 +160,7 @@ test('release inside opponent base scores for opponent and decrements releaser',
   const bEnd = end.busters[0];
   assert.equal(end.scores[1], 1);
   assert.equal(end.scores[0], -1);
-  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.state, BusterState.Idle);
   assert.equal(bEnd.value, 0);
 });
 
@@ -179,7 +179,7 @@ test('release outside base decrements score', () => {
   const end = step(mid, release);
   const bEnd = end.busters[0];
   assert.equal(end.scores[0], -1);
-  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.state, BusterState.Idle);
   assert.equal(bEnd.value, 0);
   assert.equal(end.ghosts.length, 1);
   const dropped = end.ghosts[0];
@@ -220,14 +220,14 @@ test('stun drops carried ghost and sets cooldown', () => {
   // simulate victim carrying a ghost
   const ghost = state.ghosts[0];
   state.ghosts = [];
-  victim.state = 1;
+  victim.state = BusterState.Carrying;
   victim.value = ghost.id;
 
   const actions: ActionsByTeam = { 0: [{ type: 'STUN', busterId: victim.id }], 1: [] } as any;
   const next = step(state, actions);
 
   const stunned = next.busters.find(b => b.id === victim.id)!;
-  assert.equal(stunned.state, 2);
+  assert.equal(stunned.state, BusterState.Stunned);
   assert.equal(stunned.value, RULES.STUN_DURATION - 1);
 
   const postAttacker = next.busters.find(b => b.id === attacker.id)!;
@@ -305,7 +305,7 @@ test('stun attempt consumes cooldown even if invalid or out of range', () => {
   const postAttacker = next.busters.find(b => b.id === attacker.id)!;
   const postVictim = next.busters.find(b => b.id === victim.id)!;
   assert.equal(postAttacker.stunCd, RULES.STUN_COOLDOWN - 1);
-  assert.equal(postVictim.state, 0);
+  assert.equal(postVictim.state, BusterState.Idle);
 
   // Invalid target scenario
   state = initGame({ seed: 1, bustersPerPlayer: 1, ghostCount: 0 });
@@ -325,7 +325,7 @@ test('stun action is ignored while on cooldown', () => {
   const postAttacker = next.busters.find(b => b.id === attacker.id)!;
   const postVictim = next.busters.find(b => b.id === victim.id)!;
   assert.equal(postAttacker.stunCd, 0); // only decremented
-  assert.equal(postVictim.state, 0); // not stunned
+  assert.equal(postVictim.state, BusterState.Idle); // not stunned
 });
 
 test('mutual stuns drop carried ghosts and stun both busters', () => {
@@ -341,8 +341,8 @@ test('mutual stuns drop carried ghosts and stun both busters', () => {
   const g0 = state.ghosts[0];
   const g1 = state.ghosts[1];
   state.ghosts = [];
-  b0.state = 1; b0.value = g0.id;
-  b1.state = 1; b1.value = g1.id;
+  b0.state = BusterState.Carrying; b0.value = g0.id;
+  b1.state = BusterState.Carrying; b1.value = g1.id;
 
   const actions: ActionsByTeam = {
     0: [{ type: 'STUN', busterId: b1.id }],
@@ -353,8 +353,8 @@ test('mutual stuns drop carried ghosts and stun both busters', () => {
   const nb0 = next.busters.find(b => b.id === b0.id)!;
   const nb1 = next.busters.find(b => b.id === b1.id)!;
 
-  assert.equal(nb0.state, 2);
-  assert.equal(nb1.state, 2);
+  assert.equal(nb0.state, BusterState.Stunned);
+  assert.equal(nb1.state, BusterState.Stunned);
   assert.equal(nb0.value, RULES.STUN_DURATION - 1);
   assert.equal(nb1.value, RULES.STUN_DURATION - 1);
   assert.equal(nb0.stunCd, RULES.STUN_COOLDOWN - 1);
@@ -385,7 +385,7 @@ test('attempting BUST while carrying causes ghost escape without scoring', () =>
 
   const bEnd = end.busters.find(bs => bs.teamId === 0)!;
   assert.equal(end.scores[0], 0); // no score awarded
-  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.state, BusterState.Idle);
   assert.equal(bEnd.value, 0);
   assert.equal(end.ghosts.length, 1);
   const escaped = end.ghosts[0];
@@ -406,7 +406,7 @@ test('eject moves ghost only up to max distance', () => {
   const b = state.busters[0];
   const ghost = state.ghosts[0];
   state.ghosts = [];
-  b.state = 1;
+  b.state = BusterState.Carrying;
   b.value = ghost.id;
   b.x = 1000;
   b.y = 1000;
@@ -426,7 +426,7 @@ test('eject clamps ghost position to map bounds', () => {
   const b = state.busters[0];
   const ghost = state.ghosts[0];
   state.ghosts = [];
-  b.state = 1;
+  b.state = BusterState.Carrying;
   b.value = ghost.id;
   b.x = 1000;
   b.y = 1000;
@@ -460,7 +460,7 @@ test('stunned buster cannot complete BUST action', () => {
   assert.equal(gNext.endurance, 10);
   assert.equal(gNext.engagedBy, 0);
   const stunned = next.busters.find(b => b.id === victim.id)!;
-  assert.equal(stunned.state, 2);
+  assert.equal(stunned.state, BusterState.Stunned);
 });
 
 test('stunned buster cannot use RADAR', () => {
@@ -490,11 +490,11 @@ test('busting state persists into next turn until another action', () => {
   const bust: ActionsByTeam = { 0: [{ type: 'BUST', ghostId: ghost.id }], 1: [] } as any;
   const mid = step(state, bust);
   const bMid = mid.busters[0];
-  assert.equal(bMid.state, 3);
+  assert.equal(bMid.state, BusterState.Busting);
 
   const end = step(mid, { 0: [], 1: [] } as any);
   const bEnd = end.busters[0];
-  assert.equal(bEnd.state, 0);
+  assert.equal(bEnd.state, BusterState.Idle);
 });
 
 test('ghost flees 400 units after detection', () => {

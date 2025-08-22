@@ -1,4 +1,4 @@
-import { Action, GameState, TeamId, GhostState, BusterPublicState } from '@busters/shared';
+import { Action, GameState, TeamId, GhostState, BusterPublicState, BusterState } from '@busters/shared';
 import { RULES, MAP_W, MAP_H, TEAM0_BASE, TEAM1_BASE } from '@busters/shared';
 import { clamp, dist, dist2, norm, roundi, XorShift32 } from '@busters/shared';
 
@@ -30,7 +30,7 @@ export function initGame({
       const base = t === 0 ? TEAM0_BASE : TEAM1_BASE;
       const x = base.x;
       const y = base.y;
-      busters.push({ id: id++, teamId: t, x, y, state: 0, value: 0, stunCd: 0, radarUsed: false });
+      busters.push({ id: id++, teamId: t, x, y, state: BusterState.Idle, value: 0, stunCd: 0, radarUsed: false });
     }
   }
   const ghosts: GhostState[] = [];
@@ -108,7 +108,7 @@ export function collectIntents(
       const b = teamB[i];
       const a = teamActs[i];
       if (!a || a.type === 'WAIT') continue;
-      if (b.state === 2) continue; // stunned cannot act
+      if (b.state === BusterState.Stunned) continue; // stunned cannot act
       switch (a.type) {
         case 'MOVE':
           intents.set(b.id, {
@@ -146,7 +146,7 @@ export function collectIntents(
 
 export function applyMoves(next: GameState, intents: Map<number, Action>): void {
   for (const b of next.busters) {
-    if (b.state === 2) continue;
+    if (b.state === BusterState.Stunned) continue;
     const a = intents.get(b.id);
     if (a?.type === 'MOVE') {
       const dx = a.x - b.x,
@@ -174,7 +174,7 @@ export function resolveStuns(
   type PendingStun = { attacker: BusterPublicState; target: BusterPublicState };
   const pendingStuns: PendingStun[] = [];
   for (const b of next.busters) {
-    if (b.state === 2) continue;
+    if (b.state === BusterState.Stunned) continue;
     const a = intents.get(b.id);
     if (a?.type === 'STUN' && b.stunCd <= 0) {
       // cooldown is consumed regardless of target validity or range
@@ -194,7 +194,7 @@ export function resolveStuns(
   for (const tid of stunnedTargets) {
     const t = busterById.get(tid);
     if (t) {
-      t.state = 2;
+      t.state = BusterState.Stunned;
       t.value = RULES.STUN_DURATION;
     }
   }
@@ -212,14 +212,14 @@ export function handleReleases(
   ghostById: Map<number, GhostState>
 ): void {
   for (const b of next.busters) {
-    if (b.state === 2) continue;
+    if (b.state === BusterState.Stunned) continue;
     const a = intents.get(b.id);
     if (a?.type === 'RADAR' && !b.radarUsed) {
       next.radarNextVision[b.id] = true;
       b.radarUsed = true;
     }
     if (a?.type === 'RELEASE') {
-      if (b.state === 1) {
+      if (b.state === BusterState.Carrying) {
         const baseTeam = withinBase(b);
         const gid = b.value as number;
         if (baseTeam !== null) {
@@ -227,25 +227,25 @@ export function handleReleases(
           if (baseTeam !== b.teamId) {
             next.scores[b.teamId] -= 1;
           }
-          b.state = 0;
+          b.state = BusterState.Idle;
           b.value = 0;
         } else {
           next.scores[b.teamId] -= 1;
           const ghost = { id: gid, x: b.x, y: b.y, endurance: 0, engagedBy: 0 };
           next.ghosts.push(ghost);
           ghostById.set(gid, ghost);
-          b.state = 0;
+          b.state = BusterState.Idle;
           b.value = 0;
         }
       }
     }
     if (a?.type === 'EJECT') {
-      if (b.state === 1) {
+      if (b.state === BusterState.Carrying) {
         const gid = b.value as number;
         const ghost = { id: gid, x: a.x, y: a.y, endurance: 0, engagedBy: 0 };
         next.ghosts.push(ghost);
         ghostById.set(gid, ghost);
-        b.state = 0;
+        b.state = BusterState.Idle;
         b.value = 0;
       }
     }
@@ -267,8 +267,8 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // Clear previous "busting" flags from last turn
   for (const b of next.busters) {
-    if (b.state === 3) {
-      b.state = 0;
+    if (b.state === BusterState.Busting) {
+      b.state = BusterState.Idle;
       b.value = 0;
     }
   }
@@ -281,7 +281,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   // Keep "start-of-tick" facts for edge rules
   const startCarry = new Map<number, number | null>(); // busterId -> ghostId if carrying
   for (const b of state.busters) {
-    startCarry.set(b.id, b.state === 1 ? (b.value as number) : null);
+    startCarry.set(b.id, b.state === BusterState.Carrying ? (b.value as number) : null);
   }
 
   // Fast index by team
@@ -309,7 +309,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       dropped.add(ghostId);
     }
     // clear carry flag on this buster (keep stunned if applicable)
-    if (b.state === 1) { b.state = 0; b.value = 0; }
+    if (b.state === BusterState.Carrying) { b.state = BusterState.Idle; b.value = 0; }
   }
 
   // 3) STUN resolution (resets stun duration; both drop any carried ghost; cooldown spent on attempt)
@@ -320,7 +320,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 5) If a buster is carrying and *attempts* BUST, its carried ghost escapes immediately (no scoring)
   for (const b of next.busters) {
-    if (b.state === 2) continue;
+    if (b.state === BusterState.Stunned) continue;
     const a = intents.get(b.id);
     if (a?.type === 'BUST' && (startCarry.get(b.id) ?? null) !== null) {
       const gid = startCarry.get(b.id)!;
@@ -332,7 +332,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
         dropped.add(gid);
       }
       // clear carry
-      if (b.state === 1) { b.state = 0; b.value = 0; }
+      if (b.state === BusterState.Carrying) { b.state = BusterState.Idle; b.value = 0; }
     }
   }
 
@@ -355,7 +355,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   }
 
   for (const b of next.busters) {
-    if (b.state === 2) continue;
+    if (b.state === BusterState.Stunned) continue;
     const a = intents.get(b.id);
     if (a?.type === 'BUST') {
       const g = ghostById.get(a.ghostId);
@@ -369,7 +369,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
         if (!c || d2curr < c.d2) acc.closest[b.teamId] = { b, d2: d2curr };
         g.engagedBy += 1;
         // state flag (optional)
-        b.state = b.state === 2 ? 2 : 3;
+        b.state = b.state === BusterState.Stunned ? BusterState.Stunned : BusterState.Busting;
         b.value = g.id;
       }
     }
@@ -400,7 +400,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
       next.ghosts = next.ghosts.filter(g => g.id !== c.ghostId);
       ghostById.delete(c.ghostId);
       const carrier = busterById.get(c.takerBusterId);
-      if (carrier) { carrier.state = 1; carrier.value = c.ghostId; }
+      if (carrier) { carrier.state = BusterState.Carrying; carrier.value = c.ghostId; }
     }
   }
 
@@ -447,9 +447,9 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
 
   // 8) Timers
   for (const b of next.busters) {
-    if (b.state === 2) {
+    if (b.state === BusterState.Stunned) {
       b.value = Math.max(0, (b.value as number) - 1);
-      if (b.value === 0) { b.state = 0; }
+      if (b.value === 0) { b.state = BusterState.Idle; }
     }
     if (b.stunCd > 0) b.stunCd -= 1;
   }

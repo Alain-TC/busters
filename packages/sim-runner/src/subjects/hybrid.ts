@@ -15,6 +15,7 @@ import {
   clamp,
   dist,
 } from "@busters/agents/hybrid/utils";
+import { BusterState } from '@busters/shared';
 
 // Automatically derive weight keys so ORDER always includes all weights
 const WEIGHT_KEYS = Object.keys(BASE_WEIGHTS) as (keyof typeof BASE_WEIGHTS)[];
@@ -166,7 +167,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
 
     // INTERCEPT enemy carriers
     for (const e of enemies) {
-      if (e.state === 1) {
+      if (e.state === BusterState.Carrying) {
         const tx = Math.round((e.x + MY.x) / 2);
         const ty = Math.round((e.y + MY.y) / 2);
         tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
@@ -190,7 +191,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
     }
 
     // BLOCK enemy base (if no carriers seen)
-    if (!enemies.some(e => e.state === 1)) {
+    if (!enemies.some(e => e.state === BusterState.Carrying)) {
       tasks.push({ type: "BLOCK", target: blockerRing(TUNE, MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
     }
 
@@ -260,8 +261,8 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       const bpp = ctx.bustersPerPlayer ?? Math.max(3, friends.length || 3);
       const localIdx = (me as any).localIndex ?? (me.id % bpp);
 
-      const carrying = me.carrying !== undefined ? true : (me.state === 1);
-      const stunned = (me.state === 2);
+      const carrying = me.carrying !== undefined ? true : (me.state === BusterState.Carrying);
+      const stunned = (me.state === BusterState.Stunned);
       const stunCdLeft = me.stunCd ?? Math.max(0, (m.stunReadyAt - tick));
       const canStun = !stunned && stunCdLeft <= 0;
 
@@ -274,7 +275,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       }
 
       // Stun priority: enemy carrier in range, else nearest in bust range
-      let targetEnemy: Ent | undefined = enemies.find(e => e.state === 1 && (e.range ?? dist(me.x,me.y,e.x,e.y)) <= TUNE.STUN_RANGE);
+      let targetEnemy: Ent | undefined = enemies.find(e => e.state === BusterState.Carrying && (e.range ?? dist(me.x,me.y,e.x,e.y)) <= TUNE.STUN_RANGE);
       if (!targetEnemy && enemies.length && (enemies[0].range ?? dist(me.x,me.y,enemies[0].x,enemies[0].y)) <= BUST_MAX) {
         targetEnemy = enemies[0];
       }

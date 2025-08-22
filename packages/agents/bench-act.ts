@@ -1,6 +1,7 @@
 import { act, __mem, __pMem } from './hybrid-bot';
 import { resetMicroPerf } from './micro';
 import { performance } from 'node:perf_hooks';
+import { BusterState } from '@busters/shared';
 
 process.env.MICRO_TIMING = '1';
 
@@ -13,29 +14,29 @@ console.log = (...args: any[]) => {
 const scenarios = [
   {
     ctx: { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } },
-    obs: { self: { id: 1, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] },
+    obs: { self: { id: 1, x: 0, y: 0, state: BusterState.Idle }, friends: [], enemies: [], ghostsVisible: [] },
   },
   {
     ctx: { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } },
     obs: {
-      self: { id: 1, x: 4000, y: 4000, state: 0 },
+      self: { id: 1, x: 4000, y: 4000, state: BusterState.Idle },
       friends: [
-        { id: 2, x: 3000, y: 4000, state: 0 },
-        { id: 3, x: 3500, y: 4100, state: 0 },
+        { id: 2, x: 3000, y: 4000, state: BusterState.Idle },
+        { id: 3, x: 3500, y: 4100, state: BusterState.Idle },
       ],
       enemies: [
-        { id: 4, x: 4200, y: 4000, state: 0, range: 200 },
-        { id: 5, x: 5000, y: 4000, state: 0, range: 800 },
+        { id: 4, x: 4200, y: 4000, state: BusterState.Idle, range: 200 },
+        { id: 5, x: 5000, y: 4000, state: BusterState.Idle, range: 800 },
       ],
-      ghostsVisible: [{ id: 100, x: 4500, y: 4000, state: 0, range: 600 }],
+      ghostsVisible: [{ id: 100, x: 4500, y: 4000, state: BusterState.Idle, range: 600 }],
     },
   },
   {
     ctx: { myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } },
     obs: {
-      self: { id: 1, x: 6000, y: 6000, state: 1, carrying: 4, stunCd: 5 },
-      friends: [{ id: 2, x: 5000, y: 5500, state: 0 }],
-      enemies: [{ id: 3, x: 6100, y: 6000, state: 0, range: 100 }],
+      self: { id: 1, x: 6000, y: 6000, state: BusterState.Carrying, carrying: 4, stunCd: 5 },
+      friends: [{ id: 2, x: 5000, y: 5500, state: BusterState.Idle }],
+      enemies: [{ id: 3, x: 6100, y: 6000, state: BusterState.Idle, range: 100 }],
       ghostsVisible: [],
     },
   },

@@ -4,7 +4,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { initGame, step, ActionsByTeam } from './engine';
 import { entitiesForTeam } from './perception';
-import { Action, TeamId, MAX_TICKS } from '@busters/shared';
+import { Action, TeamId, MAX_TICKS, BusterState } from '@busters/shared';
 
 export function parseAction(line: string): Action {
   const parts = line.trim().split(/\s+/);
@@ -165,7 +165,7 @@ async function main() {
     const actions: ActionsByTeam = { 0: actions0, 1: actions1 };
 
     state = step(state, actions);
-    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === 1)) {
+    if (state.ghosts.length === 0 && !state.busters.some(b => b.state === BusterState.Carrying)) {
       break;
     }
   }

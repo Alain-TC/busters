@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { TEAM0_BASE, TEAM1_BASE, RULES } from '@busters/shared';
+import { TEAM0_BASE, TEAM1_BASE, RULES, BusterState } from '@busters/shared';
 
 type FogMode = 'god' | 'team0' | 'team1';
 
@@ -139,12 +139,12 @@ export default function App() {
       ctx.fillStyle = b.teamId === 0 ? palette.t0 : palette.t1;
       ctx.beginPath(); ctx.arc(b.x, b.y, 22, 0, Math.PI * 2); ctx.fill();
 
-      if (b.state === 1) { // carrying
+      if (b.state === BusterState.Carrying) { // carrying
         ctx.strokeStyle = palette.carry;
         ctx.lineWidth = 3 * hair;
         ctx.strokeRect(b.x - 26, b.y - 26, 52, 52);
       }
-      if (b.state === 2) { // stunned
+      if (b.state === BusterState.Stunned) { // stunned
         ctx.strokeStyle = palette.stunned;
         ctx.lineWidth = 3 * hair;
         ctx.beginPath(); ctx.moveTo(b.x - 18, b.y - 18); ctx.lineTo(b.x + 18, b.y + 18); ctx.stroke();
@@ -154,8 +154,8 @@ export default function App() {
         ctx.fillStyle = '#e5e7eb';
         ctx.font = `${14 / Math.max(s, 1)}px ui-sans-serif, system-ui`;
         const status =
-          b.state === 2 ? `stun:${b.value}` :
-          b.state === 1 ? `carry:${b.value}` : '';
+          b.state === BusterState.Stunned ? `stun:${b.value}` :
+          b.state === BusterState.Carrying ? `carry:${b.value}` : '';
         const cd = b.stunCd > 0 ? ` cd:${b.stunCd}` : '';
         ctx.fillText(`B${b.id}${status?` ${status}`:''}${cd}`, b.x + 24, b.y - 10);
       }

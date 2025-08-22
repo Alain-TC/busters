@@ -11,6 +11,7 @@ declare function readline(): string;
 declare function print(s: string): void;
 
 import { act } from "./hybrid-bot";
+import { BusterState } from '@busters/shared';
 
 type Pt = { x: number; y: number };
 
@@ -57,12 +58,12 @@ while (true) {
       x: me.x, y: me.y,
       stunCd: me.value,                // CG uses `value` for stun cooldown / stun time; good enough for gating STUN
       radarUsed: radarUsed.has(me.id), // we maintain locally
-      carrying: me.state === 1 ? me.value : undefined
+      carrying: me.state === BusterState.Carrying ? me.value : undefined
     };
 
     const enemies = opp.map((e) => ({
       id: e.id, x: e.x, y: e.y,
-      carrying: e.state === 1 ? e.value : undefined,
+      carrying: e.state === BusterState.Carrying ? e.value : undefined,
       range: d(self, e)
     }));
 
