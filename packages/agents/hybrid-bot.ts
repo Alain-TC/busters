@@ -11,6 +11,7 @@ import {
   contestedBustDelta,
   releaseBlockDelta,
   twoTurnContestDelta,
+  ejectDelta,
   scoreCandidate,
 } from "./micro";
 import { hungarian } from "./hungarian";
@@ -26,6 +27,7 @@ const WEIGHTS = WEIGHTS_IN as any;
 const W = 16000, H = 9000;
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
+const EJECT_MAX = 1760;
 
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 function dist(ax: number, ay: number, bx: number, by: number) { return Math.hypot(ax - bx, ay - by); }
@@ -424,6 +426,21 @@ export function act(ctx: Ctx, obs: Obs) {
     if (dHome <= TUNE.RELEASE_DIST) {
       return dbg({ type: "RELEASE" }, "RELEASE", "at_base");
     }
+    const threat = enemies.find(e => (e.stunnedFor ?? 0) <= 0 && dist(e.x, e.y, me.x, me.y) <= TUNE.STUN_RANGE);
+    let handoff: Ent | undefined;
+    for (const f of friends) {
+      if (f.id === me.id) continue;
+      if (dist(f.x, f.y, me.x, me.y) <= EJECT_MAX && dist(f.x, f.y, MY.x, MY.y) + 400 < dHome) {
+        handoff = f; break;
+      }
+    }
+    if ((!canStun && threat) || handoff) {
+      const target = handoff ?? MY;
+      const dir = norm(target.x - me.x, target.y - me.y);
+      const tx = clamp(me.x + dir.x * EJECT_MAX, 0, W);
+      const ty = clamp(me.y + dir.y * EJECT_MAX, 0, H);
+      return dbg({ type: "EJECT", x: tx, y: ty }, "EJECT", handoff ? "handoff" : "threat");
+    }
     const home = spacedTarget(me, MY, friends);
     return dbg({ type: "MOVE", x: home.x, y: home.y }, "CARRY_HOME", "carrying");
   }
@@ -478,6 +495,21 @@ export function act(ctx: Ctx, obs: Obs) {
 
   if (myTask) {
     const candidates: { act: any; base: number; deltas: number[]; tag: string; reason?: string }[] = [];
+
+    if (carrying) {
+      const ally = friends.filter(f => f.id !== me.id).sort((a,b)=> dist(a.x,a.y,MY.x,MY.y) - dist(b.x,b.y,MY.x,MY.y))[0];
+      const target = ally ?? MY;
+      const dir = norm(target.x - me.x, target.y - me.y);
+      const tx = clamp(me.x + dir.x * EJECT_MAX, 0, W);
+      const ty = clamp(me.y + dir.y * EJECT_MAX, 0, H);
+      candidates.push({
+        act: { type: "EJECT", x: tx, y: ty },
+        base: 95,
+        deltas: [ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })],
+        tag: "EJECT",
+        reason: ally ? "handoff" : "base",
+      });
+    }
 
     if (myTask.type === "BUST" && ghosts.length) {
       const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];

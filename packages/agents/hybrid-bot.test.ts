@@ -116,8 +116,40 @@ test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
   const task: any = { type: 'SUPPORT', target: { x: 0, y: 0 }, payload: { allyIds: [2] }, baseScore: 0 };
   const enemies: any[] = [{ id: 3, x: 0, y: 0 }];
   const MY = { x: 0, y: 0 };
-  let s1 = __scoreAssign(b, task, enemies, MY, 0);
+  const st = new HybridState();
+  st.updateRoles([b]);
+  let s1 = __scoreAssign(b, task, enemies, MY, 0, st);
   __mem.get(1)!.stunReadyAt = 5;
-  let s2 = __scoreAssign(b, task, enemies, MY, 0);
+  let s2 = __scoreAssign(b, task, enemies, MY, 0, st);
   assert.ok(s1 > s2);
+});
+
+test('ejects when threatened and stun on cooldown', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 5 };
+  const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
+  const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
+  const actRes = act(ctx, obs);
+  assert.equal(actRes.type, 'EJECT');
+});
+
+test('ejects to closer ally when safe', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const self = { id: 1, x: 6000, y: 6000, state: 1, stunCd: 10 };
+  const ally = { id: 3, x: 5000, y: 5000, state: 0 };
+  const obs: any = { tick: 5, self, friends: [ally], enemies: [], ghostsVisible: [] };
+  const actRes = act(ctx, obs);
+  assert.equal(actRes.type, 'EJECT');
+});
+
+test('does not eject when stun ready', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 0 };
+  const enemy = { id: 2, x: 4200, y: 4000, state: 0, range: 200, stunnedFor: 0 };
+  const obs: any = { tick: 10, self, friends: [], enemies: [enemy], ghostsVisible: [] };
+  const actRes = act(ctx, obs);
+  assert.notEqual(actRes.type, 'EJECT');
 });
