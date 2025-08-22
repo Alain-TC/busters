@@ -54,6 +54,8 @@ async function resolveOppPool(specList: string[]): Promise<Array<{name: string, 
     if (k === 'random')  return '@busters/agents/random';
     if (k === 'stunner') return '@busters/agents/stunner';
     if (k === 'camper')  return '@busters/agents/camper';
+    if (k === 'defender') return '@busters/agents/defender';
+    if (k === 'scout')    return '@busters/agents/scout';
     if (k === 'hybrid')  return '@busters/agents/hybrid';
     if (k === 'hof')     return '@busters/agents/hof';
     return k; // assume direct spec
@@ -410,7 +412,7 @@ async function main() {
     const seedsPer = Number(getFlag(rest, 'seeds-per', 7));
     const episodesPerSeed = Number(getFlag(rest, 'eps-per-seed', 3));
     const jobs = Number(getFlag(rest, 'jobs', 1)); // reserved
-    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,stunner,camper,hof'));
+    const oppPoolArg = String(getFlag(rest, 'opp-pool', 'greedy,random,stunner,camper,defender,scout,hof'));
     const subject = String(getFlag(rest, 'subject', '')).trim().toLowerCase();
     const pfsp = getBool(rest, 'pfsp', false);
     const pfspCount = Number(getFlag(rest, 'pfsp-count', 3));
@@ -451,7 +453,7 @@ async function main() {
     }
 
     console.log(`Unknown or empty --subject. Use: --subject hybrid`);
-    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random,hof`);
+    console.log(`Example:\n  tsx src/cli.ts train --subject hybrid --algo cma --pop 16 --gens 4 --seeds-per 5 --eps-per-seed 2 --seed 99 --opp-pool greedy,stunner,camper,random,defender,scout,hof`);
     return;
   }
 
@@ -553,7 +555,7 @@ async function main() {
 
   console.log(`Usage:
   # Train Hybrid (CEM)
-  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,hof [--pfsp]
+  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,defender,scout,hof [--pfsp]
 
   # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]

@@ -37,7 +37,7 @@ function table(pool: string[], meId = "evolved") {
   return out;
 }
 
-const poolGuess = ["greedy", "random", "camper", "stunner"];
+const poolGuess = ["greedy", "random", "camper", "stunner", "defender", "scout"];
 console.log("PFSP inspector");
 console.log(" target =", target, " temp =", temp);
 console.log(" elo =", elo);

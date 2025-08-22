@@ -13,6 +13,8 @@ const ALIASES: Record<string, string> = {
   stunner: "@busters/agents/stunner",
   camper: "@busters/agents/camper",
   random: "@busters/agents/random",
+  defender: "@busters/agents/defender",
+  scout: "@busters/agents/scout",
   hybrid: "@busters/agents/hybrid",
   evolved: "@busters/agents/evolved", // if present in your repo
   hof: "@busters/agents/hof",          // <-- important one
