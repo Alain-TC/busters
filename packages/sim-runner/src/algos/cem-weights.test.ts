@@ -48,3 +48,43 @@ test('trainCemWeights moves mean toward target', async () => {
   const hist = fs.readdirSync(tmpDir).filter(f => f.startsWith('genome_') && f.endsWith('.json'));
   assert.ok(hist.length >= 1, 'should write timestamped genome artifact');
 });
+
+test('trainCemWeights parallel evaluation matches sequential', async () => {
+  const base = weightsToVec(DEFAULT_WEIGHTS);
+  const target = base.map((v) => v + 1);
+
+  const baseEval = (w: any) => {
+    const vec = weightsToVec(w);
+    return -dist2(vec, target);
+  };
+
+  // Sequential evaluator: ensures one eval resolves at a time
+  let chain = Promise.resolve();
+  const seqEval = (w: any, _opp: string) => {
+    chain = chain.then(() => Promise.resolve(baseEval(w)));
+    return chain;
+  };
+
+  // Parallel evaluator with deterministic staggered delays
+  let call = 0;
+  const parEval = async (w: any, _opp: string) => {
+    const delay = (call++ % 5) * 5;
+    await new Promise((r) => setTimeout(r, delay));
+    return baseEval(w);
+  };
+
+  const opts = {
+    gens: 1,
+    pop: 12,
+    elitePct: 0.5,
+    seed: 42,
+    oppPool: ['greedy', 'random'],
+    evaluate: seqEval,
+  } as const;
+
+  const seqRes = await trainCemWeights(opts);
+  const parRes = await trainCemWeights({ ...opts, evaluate: parEval });
+
+  assert.deepEqual(parRes.mean, seqRes.mean);
+  assert.deepEqual(parRes.cov, seqRes.cov);
+});

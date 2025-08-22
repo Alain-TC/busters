@@ -47,13 +47,15 @@ export async function trainCemWeights(opts: TrainOpts) {
     }
 
     // --- Evaluate via PFSP-opponent sampling ---
-    const evals: { idx: number; fit: number }[] = [];
-    for (let i = 0; i < pop; i++) {
-      const w = vecToWeights(popVecs[i]);
-      const opp = selectOpponentsPFSP({ meId: "weights", candidates: oppPool, n: 1 })[0].id;
-      const fit = await evaluate(w, opp);
-      evals.push({ idx: i, fit });
-    }
+    const evals: { idx: number; fit: number }[] = new Array(pop);
+    await Promise.all(
+      popVecs.map(async (vec, i) => {
+        const w = vecToWeights(vec);
+        const opp = selectOpponentsPFSP({ meId: "weights", candidates: oppPool, n: 1 })[0].id;
+        const fit = await evaluate(w, opp);
+        evals[i] = { idx: i, fit };
+      }),
+    );
     evals.sort((a, b) => b.fit - a.fit);
 
     // track best genome across training
