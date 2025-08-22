@@ -4,7 +4,7 @@ export const meta = { name: "HybridBaseline" };
 // Params are imported so CEM can overwrite them.
 import HYBRID_PARAMS, { TUNE as TUNE_IN, WEIGHTS as WEIGHTS_IN } from "./hybrid-params";
 import { Fog } from "./fog";
-import { HybridState, getState, predictEnemyPath } from "./lib/state";
+import { HybridState, StateFactory, predictEnemyPath } from "./lib/state";
 import {
   estimateInterceptPoint,
   duelStunDelta,
@@ -25,9 +25,6 @@ import { hungarian } from "./hungarian";
 import { clamp, dist, norm } from "../shared/src/vec.ts";
 
 const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
-
-// Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
-const fog = new Fog();
 
 /** Bind params locally (reads from hybrid-params) */
 const TUNE = TUNE_IN;
@@ -67,12 +64,6 @@ type Obs = {
   friends?: Ent[];
   ghostsVisible?: (Ent & { id: number })[];
 };
-
-/** Memory per buster */
-const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
-export const __mem = mem; // exposed for tests
-function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
-let lastTick = Infinity;
 
 /** Patrol paths used as exploration frontiers (simple & fast) */
 const PATROLS: Pt[][] = [
@@ -118,16 +109,29 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT" | "CARRY";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
-/** Shared per-tick plan cache (computed once, read by all) */
-let planTick = -1;
-let planAssign = new Map<number, Task>(); // busterId -> task
-
 function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
   const map = new Map<number, Ent>();
   map.set(self.id, self);
   (friends ?? []).forEach(f => map.set(f.id, f));
   return Array.from(map.values());
 }
+
+export function createBot() {
+  const fog = new Fog();
+  const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
+  function M(id: number) {
+    if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false });
+    return mem.get(id)!;
+  }
+  const pMem = new Map<number, { wp: number }>();
+  function MPatrol(id: number) {
+    if (!pMem.has(id)) pMem.set(id, { wp: 0 });
+    return pMem.get(id)!;
+  }
+  let lastTick = Infinity;
+  let planTick = -1;
+  let planAssign = new Map<number, Task>();
+  const stateFactory = new StateFactory();
 
 function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
   const tasks: Task[] = [];
@@ -250,11 +254,6 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
   return tasks;
 }
-
-/** tiny patrol memory for exploration */
-const pMem = new Map<number, { wp: number }>();
-export const __pMem = pMem; // exposed for tests
-function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
 function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, state: HybridState): number {
@@ -412,13 +411,9 @@ function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: nu
 }
 
 // Expose internals for testing
-export const __runAuction = runAuction;
-export const __scoreAssign = scoreAssign;
-export const __buildTasks = buildTasks;
-export const __fog = fog;
 
-/** --- Main per-buster policy --- */
-export function act(ctx: Ctx, obs: Obs) {
+  /** --- Main per-buster policy --- */
+  function act(ctx: Ctx, obs: Obs) {
   resetMicroPerf();
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
   if (tick <= 1 && tick < lastTick) {
@@ -437,7 +432,7 @@ export function act(ctx: Ctx, obs: Obs) {
     return act;
   };
   const m = M(me.id);
-  const state = getState(ctx, obs);
+  const state = stateFactory.getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
   state.decayGhosts();
   state.diffuseGhosts();
@@ -895,5 +890,16 @@ export function act(ctx: Ctx, obs: Obs) {
 
   const back = spacedTarget(me, MY, friends);
   return finish(dbg({ type: "MOVE", x: back.x, y: back.y }, "IDLE_BACK", "no_task"));
+}
+
+  return {
+    act,
+    __mem: mem,
+    __pMem: pMem,
+    __fog: fog,
+    __runAuction: runAuction,
+    __scoreAssign: scoreAssign,
+    __buildTasks: buildTasks,
+  };
 }
 

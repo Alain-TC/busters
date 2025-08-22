@@ -301,14 +301,24 @@ export function predictEnemyPath(e: EnemySeen, base: Pt, ticks: number): Pt[] {
   return path;
 }
 
-// ---- singleton per process (fine while only our team uses this bot) ----
-type AnyObj = Record<string, any>;
-const G: AnyObj = (globalThis as AnyObj).__HYBRID_STATE__ ||= {};
-export function getState(ctx: any, obs: any): HybridState {
-  // Reset on new match or at tick 0/1 to be safe
-  const key = "team"; // one state is fine for our side in this runner
-  if (!G[key] || obs?.tick <= 1) {
-    G[key] = new HybridState(ctx?.bounds, 8, 5, DEFAULT_ENEMY_MAX_AGE, ctx?.ghostSpawns);
+/** Factory to manage a single {@link HybridState} instance per match. */
+export class StateFactory {
+  private state: HybridState | undefined;
+
+  /**
+   * Retrieve the current state, creating a fresh instance when starting a new
+   * match (identified by the first couple of ticks) or when none exists yet.
+   */
+  getState(ctx: any, obs: any): HybridState {
+    if (!this.state || obs?.tick <= 1) {
+      this.state = new HybridState(
+        ctx?.bounds,
+        8,
+        5,
+        DEFAULT_ENEMY_MAX_AGE,
+        ctx?.ghostSpawns,
+      );
+    }
+    return this.state;
   }
-  return G[key] as HybridState;
 }

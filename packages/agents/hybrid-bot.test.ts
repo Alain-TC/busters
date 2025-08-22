@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog } from './hybrid-bot';
+import { createBot } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
 
 test('mem resets on new match and repopulates', () => {
+  const { act, __mem } = createBot();
   // pre-populate with stale entry
   __mem.set(99, { stunReadyAt: 5, radarUsed: true });
 
@@ -21,6 +22,7 @@ test('mem resets on new match and repopulates', () => {
 });
 
 test('patrol indices reset on new match', () => {
+  const { act, __pMem } = createBot();
   // seed patrol memory with stale waypoint
   __pMem.set(1, { wp: 3 });
   __pMem.set(99, { wp: 2 });
@@ -65,6 +67,7 @@ test('fog heat diffuses, normalizes, and reduces when visited', () => {
 });
 
 test('explore task score increases with fog heat', () => {
+  const { __fog, __buildTasks } = createBot();
   __fog.reset();
   __fog.beginTick(10);
   const ctx: any = { tick: 10, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
@@ -83,6 +86,7 @@ test('explore task score increases with fog heat', () => {
 });
 
 test('runAuction aligns with Hungarian optimal assignment', () => {
+  const { __runAuction, __scoreAssign } = createBot();
   const team = [
     { id: 1, x: 0, y: 0 },
     { id: 2, x: 3000, y: 0 },
@@ -112,6 +116,7 @@ test('runAuction aligns with Hungarian optimal assignment', () => {
 });
 
 test('runAuction uses greedy assignment when combinations exceed 100', () => {
+  const { __runAuction } = createBot();
   const team = Array.from({ length: 11 }, (_, i) => ({ id: i + 1, x: i * 100, y: 0 }));
   const tasks = Array.from({ length: 10 }, (_, i) => ({ type: 'EXPLORE', target: { x: i * 100, y: 0 }, baseScore: 100 }));
   const enemies: any[] = [];
@@ -129,6 +134,7 @@ test('runAuction uses greedy assignment when combinations exceed 100', () => {
 });
 
 test('bot does not stun an already stunned enemy', () => {
+  const { act, __mem } = createBot();
   __mem.clear();
   const ctx: any = {};
   const self = { id: 1, x: 0, y: 0, state: 0 };
@@ -146,6 +152,7 @@ test('bot does not stun an already stunned enemy', () => {
 });
 
 test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
+  const { __scoreAssign, __mem } = createBot();
   __mem.clear();
   const b: any = { id: 1, x: 0, y: 0 };
   const task: any = { type: 'SUPPORT', target: { x: 0, y: 0 }, payload: { allyIds: [2] }, baseScore: 0 };
@@ -160,6 +167,7 @@ test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
 });
 
 test('ejects when threatened and stun on cooldown', () => {
+  const { act, __mem } = createBot();
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
   const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 5 };
@@ -170,6 +178,7 @@ test('ejects when threatened and stun on cooldown', () => {
 });
 
 test('ejects to closer ally when safe', () => {
+  const { act, __mem } = createBot();
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
   const self = { id: 1, x: 6000, y: 6000, state: 1, stunCd: 10 };
@@ -180,6 +189,7 @@ test('ejects to closer ally when safe', () => {
 });
 
 test('does not eject when stun ready', () => {
+  const { act, __mem } = createBot();
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
   const self = { id: 1, x: 4000, y: 4000, state: 1, stunCd: 0 };
@@ -190,6 +200,7 @@ test('does not eject when stun ready', () => {
 });
 
 test('buildTasks emits carry tasks for carriers', () => {
+  const { __buildTasks } = createBot();
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
   const self: any = { id: 1, x: 1000, y: 1000, state: 1 };
   const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
@@ -200,6 +211,7 @@ test('buildTasks emits carry tasks for carriers', () => {
 });
 
 test('carrier can switch to higher-scoring task', () => {
+  const { __buildTasks, __runAuction } = createBot();
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
   const self: any = { id: 1, x: 1000, y: 1000, state: 1, carrying: 4 };
   const obs: any = { tick: 0, self, friends: [], enemies: [], ghostsVisible: [] };
@@ -213,6 +225,7 @@ test('carrier can switch to higher-scoring task', () => {
 });
 
 test('buildTasks uses predicted path for unseen carriers', () => {
+  const { __buildTasks } = createBot();
   const ctx: any = { tick: 3, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
   const self: any = { id: 1, x: 0, y: 0, state: 0 };
   const obs: any = { tick: 3, self, friends: [], enemies: [], ghostsVisible: [] };
@@ -227,6 +240,7 @@ test('buildTasks uses predicted path for unseen carriers', () => {
 });
 
 test('buildTasks skips SUPPORT for enemies stunned for several ticks', () => {
+  const { __buildTasks, __mem } = createBot();
   __mem.clear();
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
   const self: any = { id: 1, x: 0, y: 0, state: 0 };

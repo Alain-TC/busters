@@ -1,4 +1,5 @@
-import { act, __mem, __pMem } from './hybrid-bot';
+import { createBot } from './hybrid-bot';
+const { act, __mem, __pMem } = createBot();
 import { resetMicroPerf } from './micro';
 import { performance } from 'node:perf_hooks';
 
