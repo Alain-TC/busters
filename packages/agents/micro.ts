@@ -2,6 +2,12 @@
 /** No external deps; keep everything numerically cheap. */
 
 import { RULES } from "@busters/shared";
+import { performance } from "perf_hooks";
+
+export const microPerf = { twoTurnMs: 0, twoTurnCalls: 0 };
+export const MICRO_BUDGET_MS = 0.5;
+export function resetMicroPerf() { microPerf.twoTurnMs = 0; microPerf.twoTurnCalls = 0; }
+export function microOverBudget() { return microPerf.twoTurnMs > MICRO_BUDGET_MS; }
 
 const SPEED = RULES.MOVE_SPEED; // buster speed per turn
 
@@ -90,6 +96,7 @@ export function twoTurnContestDelta(opts: {
   canStunMe: boolean;
   canStunEnemy: boolean;
 }) {
+  const t0 = performance.now();
   const { me, enemy, ghost, bustMin, bustMax, stunRange, canStunMe, canStunEnemy } = opts;
   const me1 = step(me, ghost ?? enemy);
   const enemy1 = step(enemy, ghost ?? me);
@@ -111,6 +118,8 @@ export function twoTurnContestDelta(opts: {
       canStunMe,
     });
   }
+  microPerf.twoTurnMs += performance.now() - t0;
+  microPerf.twoTurnCalls++;
   return delta;
 }
 

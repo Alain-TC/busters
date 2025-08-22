@@ -13,6 +13,9 @@ import {
   twoTurnContestDelta,
   ejectDelta,
   scoreCandidate,
+  resetMicroPerf,
+  microPerf,
+  microOverBudget,
 } from "./micro";
 import { hungarian } from "./hungarian";
 import { clamp, dist, norm } from "@busters/shared";
@@ -253,7 +256,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
       s += releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE });
       const near = (enemy.range ?? dist(b.x, b.y, enemy.x, enemy.y)) <= 2500;
       const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
-      if (near || threat) {
+      if ((near || threat) && !microOverBudget()) {
         s += twoTurnContestDelta({
           me: b,
           enemy,
@@ -283,6 +286,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
     });
     const close = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2500);
     for (const e of close) {
+      if (microOverBudget()) break;
       s += twoTurnContestDelta({
         me: b,
         enemy: e,
@@ -315,7 +319,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
     const carrier = enemies.find(e => e.state === 1);
     if (carrier) {
       s += releaseBlockDelta({ blocker: b, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
-      if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000) {
+      if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000 && !microOverBudget()) {
         s += twoTurnContestDelta({
           me: b,
           enemy: carrier,
@@ -390,6 +394,7 @@ export const __buildTasks = buildTasks;
 
 /** --- Main per-buster policy --- */
 export function act(ctx: Ctx, obs: Obs) {
+  resetMicroPerf();
   const tick = (ctx.tick ?? obs.tick ?? 0) | 0;
   if (tick <= 1 && tick < lastTick) {
     mem.clear();
@@ -400,6 +405,12 @@ export function act(ctx: Ctx, obs: Obs) {
   }
   lastTick = tick;
   const me = obs.self;
+  const finish = <T>(act: T) => {
+    if (process.env.MICRO_TIMING) {
+      console.log(`[micro] t=${tick} b=${me.id} twoTurn=${microPerf.twoTurnMs.toFixed(3)}ms calls=${microPerf.twoTurnCalls}`);
+    }
+    return act;
+  };
   const m = M(me.id);
   const state = getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
@@ -453,7 +464,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const [dx, dy] = norm(target.x - me.x, target.y - me.y);
         const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
         const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
-        return dbg({ type: "EJECT", x: tx, y: ty }, "EJECT", handoff ? "handoff" : "threat");
+        return finish(dbg({ type: "EJECT", x: tx, y: ty }, "EJECT", handoff ? "handoff" : "threat"));
       }
     }
     // fall through to planning for carry task
@@ -477,21 +488,21 @@ export function act(ctx: Ctx, obs: Obs) {
     }) + (targetEnemy.state === 1 ? releaseBlockDelta({ blocker: me, carrier: targetEnemy, myBase: MY, stunRange: TUNE.STUN_RANGE }) : 0);
     if (duel >= 0) {
       mem.get(me.id)!.stunReadyAt = tick + STUN_CD;
-      return dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat");
+      return finish(dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat"));
     }
   }
 
   // Scheduled RADAR (staggered)
   if (!m.radarUsed && !stunned) {
-    if (localIdx === 0 && tick === TUNE.RADAR1_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return dbg({ type: "RADAR" }, "RADAR", "RADAR1_TURN"); }
-    if (localIdx === 1 && tick === TUNE.RADAR2_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return dbg({ type: "RADAR" }, "RADAR", "RADAR2_TURN"); }
+    if (localIdx === 0 && tick === TUNE.RADAR1_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return finish(dbg({ type: "RADAR" }, "RADAR", "RADAR1_TURN")); }
+    if (localIdx === 1 && tick === TUNE.RADAR2_TURN) { m.radarUsed = true; fog.clearCircle(me, 4000); return finish(dbg({ type: "RADAR" }, "RADAR", "RADAR2_TURN")); }
   }
 
   // Bust immediately if already in ring
   if (ghosts.length) {
     const g = ghosts[0];
     const r = g.range ?? dist(me.x, me.y, g.x, g.y);
-    if (r >= BUST_MIN && r <= BUST_MAX) return dbg({ type: "BUST", ghostId: g.id }, "BUST_RING", "in_ring");
+    if (r >= BUST_MIN && r <= BUST_MAX) return finish(dbg({ type: "BUST", ghostId: g.id }, "BUST_RING", "in_ring"));
   }
 
   /* ---------- Build shared plan once per tick ---------- */
@@ -541,6 +552,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const close = enemiesAll.filter(e => dist(e.x, e.y, P.x, P.y) <= 2500);
         const deltas: number[] = [];
         for (const e of close) {
+          if (microOverBudget()) break;
           deltas.push(
             twoTurnContestDelta({
               me: sim,
@@ -589,6 +601,7 @@ export function act(ctx: Ctx, obs: Obs) {
             const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
             let extra = 0;
             for (const e of close) {
+              if (microOverBudget()) break;
               extra += twoTurnContestDelta({
                 me,
                 enemy: e,
@@ -626,6 +639,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
         let extra = 0;
         for (const e of close) {
+          if (microOverBudget()) break;
           extra += twoTurnContestDelta({
             me: sim,
             enemy: e,
@@ -658,7 +672,7 @@ export function act(ctx: Ctx, obs: Obs) {
           );
           const near = (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= 2500;
           const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
-          if (near || threat) {
+          if ((near || threat) && !microOverBudget()) {
             deltas.push(
               twoTurnContestDelta({
                 me: sim,
@@ -683,15 +697,17 @@ export function act(ctx: Ctx, obs: Obs) {
           canStunEnemy: enemy.state !== 2,
           stunRange: TUNE.STUN_RANGE,
         });
-        delta += twoTurnContestDelta({
-          me,
-          enemy,
-          bustMin: BUST_MIN,
-          bustMax: BUST_MAX,
-          stunRange: TUNE.STUN_RANGE,
-          canStunMe: true,
-          canStunEnemy: enemy.state !== 2,
-        });
+        if (!microOverBudget()) {
+          delta += twoTurnContestDelta({
+            me,
+            enemy,
+            bustMin: BUST_MIN,
+            bustMax: BUST_MAX,
+            stunRange: TUNE.STUN_RANGE,
+            canStunMe: true,
+            canStunEnemy: enemy.state !== 2,
+          });
+        }
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "intercept" });
       }
     }
@@ -759,7 +775,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const carrier = enemiesAll.find(e => e.state === 1);
         if (carrier) {
           let delta = releaseBlockDelta({ blocker: me, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
-          if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000) {
+          if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000 && !microOverBudget()) {
             delta += twoTurnContestDelta({
               me,
               enemy: carrier,
@@ -796,7 +812,7 @@ export function act(ctx: Ctx, obs: Obs) {
       const scored = candidates.map(c => ({ s: scoreCandidate({ base: c.base, deltas: c.deltas }), c }));
       scored.sort((a, b) => b.s - a.s);
       const best = scored[0].c;
-      return dbg(best.act, best.tag, best.reason);
+      return finish(dbg(best.act, best.tag, best.reason));
     }
   }
 
@@ -805,10 +821,10 @@ export function act(ctx: Ctx, obs: Obs) {
   if (ghosts.length) {
     const g = ghosts[0];
     const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
-    return dbg({ type: "MOVE", x: chase.x, y: chase.y }, "CHASE", "nearest_ghost");
+    return finish(dbg({ type: "MOVE", x: chase.x, y: chase.y }, "CHASE", "nearest_ghost"));
   }
 
   const back = spacedTarget(me, MY, friends);
-  return dbg({ type: "MOVE", x: back.x, y: back.y }, "IDLE_BACK", "no_task");
+  return finish(dbg({ type: "MOVE", x: back.x, y: back.y }, "IDLE_BACK", "no_task"));
 }
 
