@@ -9,6 +9,8 @@ import vm from 'node:vm';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
 const outFile = path.join(root, 'codingame_bot.js');
+const hadFile = fs.existsSync(outFile);
+const original = hadFile ? fs.readFileSync(outFile, 'utf8') : undefined;
 
 test('exported bot runs under codingame_bot.js', () => {
   // export using current hybrid parameters
@@ -24,6 +26,10 @@ test('exported bot runs under codingame_bot.js', () => {
     });
     assert.equal(outputs.length, 2, 'expected two action lines');
   } finally {
-    if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
+    if (hadFile && original !== undefined) {
+      fs.writeFileSync(outFile, original);
+    } else if (fs.existsSync(outFile)) {
+      fs.unlinkSync(outFile);
+    }
   }
 });
