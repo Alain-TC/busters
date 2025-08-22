@@ -5,6 +5,8 @@
  *  Keep it tiny and robust; we’ll extend later (ghost probs, priors, etc.).
  */
 
+import { RULES } from "@busters/shared";
+
 export type Pt = { x: number; y: number };
 
 export type Role = "SCOUT" | "CHASER" | "CARRIER" | "INTERCEPT" | "BLOCK";
@@ -17,9 +19,11 @@ function centerOfCell(cx: number, cy: number, cellW: number, cellH: number): Pt 
   return { x: cx * cellW + cellW / 2, y: cy * cellH + cellH / 2 };
 }
 
-type EnemySeen = {
+export type EnemySeen = {
   id: number;
   last: Pt;
+  prev?: Pt;
+  vel?: Pt;
   lastTick: number;
   carrying: boolean;
   stunCd: number | undefined;
@@ -203,9 +207,15 @@ export class HybridState {
     if (!enemies) return;
     for (const e of enemies) {
       if (e?.x === undefined || e?.y === undefined) continue;
+      const prev = this.enemies.get(e.id);
+      const prevPos = prev?.last;
+      const dt = prev && tick !== undefined ? (tick - prev.lastTick) : 0;
+      const vel = prevPos && dt > 0 ? { x: (e.x - prevPos.x) / dt, y: (e.y - prevPos.y) / dt } : prev?.vel;
       this.enemies.set(e.id, {
         id: e.id,
         last: { x: e.x, y: e.y },
+        prev: prevPos,
+        vel,
         lastTick: tick ?? 0,
         carrying: e.carrying !== undefined,
         stunCd: e.stunCd
@@ -230,6 +240,25 @@ export class HybridState {
   roleOf(id: number): Role {
     return this.roles.get(id) ?? "CHASER";
   }
+}
+
+export function predictEnemyPath(e: EnemySeen, base: Pt, ticks: number): Pt[] {
+  const path: Pt[] = [];
+  let cur = { ...e.last };
+  let v = e.vel;
+  for (let i = 0; i < ticks; i++) {
+    if (!v) {
+      const dx = base.x - cur.x, dy = base.y - cur.y;
+      const d = Math.hypot(dx, dy) || 1;
+      v = { x: (dx / d) * RULES.MOVE_SPEED, y: (dy / d) * RULES.MOVE_SPEED };
+    }
+    cur = { x: cur.x + v.x, y: cur.y + v.y };
+    path.push({ x: Math.round(cur.x), y: Math.round(cur.y) });
+    const bx = base.x - cur.x, by = base.y - cur.y;
+    if (Math.hypot(bx, by) <= RULES.MOVE_SPEED) break;
+    if (v.x * bx + v.y * by <= 0) v = undefined;
+  }
+  return path;
 }
 
 // ---- singleton per process (fine while only our team uses this bot) ----
