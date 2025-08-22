@@ -1,12 +1,14 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta, interceptDelta, twoTurnInterceptDelta, twoTurnEjectDelta } from './micro';
+import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta, interceptDelta, twoTurnInterceptDelta, twoTurnEjectDelta, resetMicroPerf, microPerf, microOverBudget, MICRO_BUDGET_MS } from './micro';
 import { RULES } from '@busters/shared';
 
 // Verify contested bust uses projected positions
 const STUN = RULES.STUN_RANGE;
 const BUST_MIN = RULES.BUST_MIN;
 const BUST_MAX = RULES.BUST_MAX;
+
+beforeEach(() => resetMicroPerf());
 
 test('contested bust projects one turn ahead', () => {
   const me = { id: 1, x: 2000, y: 0 };
@@ -156,4 +158,97 @@ test('twoTurnEjectDelta penalizes enemy near landing', () => {
     canStunEnemy: true,
   });
   assert.ok(risky < safe);
+});
+
+test('micro rollouts cache and stay under budget', () => {
+  const me = { id: 1, x: 0, y: 0 };
+  const enemy = { id: 2, x: 3000, y: 0 };
+  const ghost = { x: 1000, y: 0 };
+  const myBase = { x: 0, y: 0 };
+
+  const cOpts = {
+    me,
+    enemy,
+    ghost,
+    bustMin: BUST_MIN,
+    bustMax: BUST_MAX,
+    stunRange: STUN,
+    canStunMe: true,
+    canStunEnemy: true,
+  };
+  const firstC = twoTurnContestDelta(cOpts);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(twoTurnContestDelta(cOpts), firstC);
+  }
+
+  const iOpts = {
+    me,
+    enemy,
+    myBase,
+    stunRange: STUN,
+    canStunMe: true,
+    canStunEnemy: true,
+  };
+  const firstI = twoTurnInterceptDelta(iOpts);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(twoTurnInterceptDelta(iOpts), firstI);
+  }
+
+  const eOpts = {
+    me,
+    enemy,
+    target: { x: 800, y: 0 },
+    myBase,
+    stunRange: STUN,
+    canStunEnemy: true,
+  };
+  const firstE = twoTurnEjectDelta(eOpts);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(twoTurnEjectDelta(eOpts), firstE);
+  }
+
+  assert.ok(!microOverBudget());
+});
+
+test('micro rollouts stop when over budget', () => {
+  const me = { id: 1, x: 0, y: 0 };
+  const enemy = { id: 2, x: 3000, y: 0 };
+  const ghost = { x: 1000, y: 0 };
+  const myBase = { x: 0, y: 0 };
+  microPerf.twoTurnMs = MICRO_BUDGET_MS;
+  assert.equal(
+    twoTurnContestDelta({
+      me,
+      enemy,
+      ghost,
+      bustMin: BUST_MIN,
+      bustMax: BUST_MAX,
+      stunRange: STUN,
+      canStunMe: true,
+      canStunEnemy: true,
+    }),
+    0
+  );
+  assert.equal(
+    twoTurnInterceptDelta({
+      me,
+      enemy,
+      myBase,
+      stunRange: STUN,
+      canStunMe: true,
+      canStunEnemy: true,
+    }),
+    0
+  );
+  assert.equal(
+    twoTurnEjectDelta({
+      me,
+      enemy,
+      target: { x: 800, y: 0 },
+      myBase,
+      stunRange: STUN,
+      canStunEnemy: true,
+    }),
+    0
+  );
 });
