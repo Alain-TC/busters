@@ -871,13 +871,16 @@ export function act(ctx: Ctx, obs: Obs) {
   }
   lastTick = tick;
   const me = obs.self;
-  const finish = <T>(act: T) => {
+  const m = M(me.id);
+  const finish = <T extends { type?: string }>(act: T) => {
+    if ((act as any)?.type === "STUN") {
+      m.stunReadyAt = tick + STUN_CD;
+    }
     if (process.env.MICRO_TIMING) {
       console.log(`[micro] t=${tick} b=${me.id} twoTurn=${microPerf.twoTurnMs.toFixed(3)}ms calls=${microPerf.twoTurnCalls}`);
     }
     return act;
   };
-  const m = M(me.id);
   const state = getState(ctx, obs);
   state.trackEnemies(obs.enemies, tick);
   state.decayGhosts();
