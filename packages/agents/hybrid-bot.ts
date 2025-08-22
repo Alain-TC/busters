@@ -20,9 +20,9 @@ import {
   microPerf,
   microOverBudget,
 } from "./micro";
-import { hungarian } from "./hungarian";
 // Import basic vector helpers directly to avoid workspace package resolution issues
 import { clamp, dist, norm } from "../shared/src/vec.ts";
+import { buildTasks as baseBuildTasks, runAuction as baseRunAuction, PATROLS, MPatrol, pMem } from "../shared/src/hybrid-core.ts";
 
 const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
 
@@ -72,14 +72,6 @@ export const __mem = mem; // exposed for tests
 function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false, wp: 0 }); return mem.get(id)!; }
 let lastTick = Infinity;
 
-/** Patrol paths used as exploration frontiers (simple & fast) */
-const PATROLS: Pt[][] = [
-  [ {x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500} ],
-  [ {x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500} ],
-  [ {x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000} ],
-  [ {x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500} ]
-];
-
 /** Resolve bases robustly (mirror enemy if missing) */
 function resolveBases(ctx: Ctx): { my: Pt; enemy: Pt } {
   const my = ctx.myBase ?? { x: 0, y: 0 };
@@ -106,12 +98,6 @@ function spacedTarget(me: Ent, raw: Pt, friends?: Ent[]): Pt {
   return { x: clamp(raw.x + ax * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + ay * TUNE.SPACING_PUSH, 0, H) };
 }
 
-/** Base-block ring point (outside enemy base, facing from ours) */
-function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
-  const [vx, vy] = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
-  return { x: clamp(enemyBase.x - vx * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - vy * TUNE.BLOCK_RING, 0, H) };
-}
-
 /** ---- Auction / Task machinery ---- */
 type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT" | "CARRY";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
@@ -128,20 +114,17 @@ function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
 }
 
 function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
-  const tasks: Task[] = [];
+  let tasks = baseBuildTasks(ctx as any, meObs as any, MY, EN, TUNE, WEIGHTS) as Task[];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
   const team = uniqTeam(meObs.self, meObs.friends);
   const tick = ctx.tick ?? meObs.tick ?? 0;
 
-  // INTERCEPT enemy carriers (visible)
-  for (const e of enemies) {
-    if (e.state === 1) {
-      const tx = Math.round((e.x + MY.x) / 2);
-      const ty = Math.round((e.y + MY.y) / 2);
-      tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
-    }
+  // Drop block tasks if hidden carriers are known
+  if (Array.from(state.enemies.values()).some(e => e.carrying)) {
+    tasks = tasks.filter(t => t.type !== "BLOCK");
   }
+
   // INTERCEPT last-seen carriers
   for (const e of state.enemies.values()) {
     if (e.carrying && !enemies.some(v => v.id === e.id)) {
@@ -154,30 +137,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     }
   }
 
-  // DEFEND base if enemies are close
-  let nearThreat = enemies.find(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS);
-  if (!nearThreat) {
-    for (const e of state.enemies.values()) {
-      if (dist(e.last.x, e.last.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS) {
-        nearThreat = { id: e.id, x: e.last.x, y: e.last.y } as Ent;
-        break;
-      }
-    }
-  }
-  if (nearThreat) {
-    const tx = Math.round((nearThreat.x + MY.x) / 2);
-    const ty = Math.round((nearThreat.y + MY.y) / 2);
-    tasks.push({ type: "DEFEND", target: { x: tx, y: ty }, payload: { enemyId: nearThreat.id }, baseScore: WEIGHTS.DEFEND_BASE + WEIGHTS.DEFEND_NEAR_BONUS });
-  }
-
-  // BUST visible ghosts
+  // SUPPORT contested busts
   for (const g of ghosts) {
-    const r = g.range ?? dist(meObs.self.x, meObs.self.y, g.x, g.y);
-    const onRingBonus = (r >= BUST_MIN && r <= BUST_MAX) ? WEIGHTS.BUST_RING_BONUS : 0;
-    const risk = (enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
-    tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
-
-    // SUPPORT contested busts
     const alliesNear = team.filter(f => dist(f.x, f.y, g.x, g.y) <= BUST_MAX);
     const enemiesNear = enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200);
     if (alliesNear.length && enemiesNear.length) {
@@ -214,12 +175,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     tasks.push({ type: "CARRY", target: mid, payload: { id: mate.id }, baseScore });
   }
 
-  // BLOCK enemy base (if no carriers seen)
-  if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
-    tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
-  }
-
-  // EXPLORE: coarse frontier via shared state (fallback to patrols)
+  // Replace explore tasks with fog-aware version
+  tasks = tasks.filter(t => t.type !== "EXPLORE");
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
@@ -228,7 +185,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     if (!early) {
       const fr = fog.frontier(mate);
       target = fr.target;
-      baseScore += fr.score * 1e-5; // scale frontier score
+      baseScore += fr.score * 1e-5;
     }
     if (!target) {
       const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
@@ -238,10 +195,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
       target = path[wp];
       payload.wp = wp;
     }
-    // bias toward high-probability / stale cells from fog
     const prob = fog.probAt(target!);
     baseScore += prob * 100;
-    // Role bias: scouts favor exploring
     if (state.roleOf(mate.id) === "SCOUT") baseScore += 5;
     tasks.push({ type: "EXPLORE", target: target!, payload, baseScore });
   }
@@ -249,10 +204,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   return tasks;
 }
 
-/** tiny patrol memory for exploration */
-const pMem = new Map<number, { wp: number }>();
 export const __pMem = pMem; // exposed for tests
-function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
 /** Score of assigning buster -> task (bigger is better) */
 function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, state: HybridState): number {
@@ -371,42 +323,7 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
 
 /** Auction/assignment: use Hungarian for optimal matching when manageable */
 function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number, state: HybridState): Map<number, Task> {
-  const assigned = new Map<number, Task>();
-
-  // Use Hungarian when both team and task sizes are reasonable
-  if (team.length && tasks.length && team.length * tasks.length <= 100) {
-    const cost = team.map(b =>
-      tasks.map(t => -scoreAssign(b, t, enemies, MY, tick, state))
-    );
-    const match = hungarian(cost);
-    for (let i = 0; i < team.length; i++) {
-      const ti = match[i];
-      if (ti >= 0 && ti < tasks.length) {
-        assigned.set(team[i].id, tasks[ti]);
-      }
-    }
-    return assigned;
-  }
-
-  // Fallback greedy heuristic
-  const freeB = new Set(team.map(b => b.id));
-  const freeT = new Set(tasks.map((_, i) => i));
-  const S: { b: number; t: number; s: number }[] = [];
-  for (let bi = 0; bi < team.length; bi++) {
-    for (let ti = 0; ti < tasks.length; ti++) {
-      S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY, tick, state) });
-    }
-  }
-  S.sort((a, b) => b.s - a.s);
-  for (const { b, t } of S) {
-    const bId = team[b].id;
-    if (!freeB.has(bId) || !freeT.has(t)) continue;
-    assigned.set(bId, tasks[t]);
-    freeB.delete(bId);
-    freeT.delete(t);
-    if (freeB.size === 0) break;
-  }
-  return assigned;
+  return baseRunAuction(team, tasks, (b, t) => scoreAssign(b, t, enemies, MY, tick, state));
 }
 
 // Expose internals for testing

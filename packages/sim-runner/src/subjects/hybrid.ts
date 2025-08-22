@@ -3,6 +3,7 @@
 import type { BotModule } from "../types"; // If you don't have this, replace BotModule with: { meta?: any; act: Function }
 import { TUNE as BASE_TUNE, WEIGHTS as BASE_WEIGHTS } from "@busters/agents/hybrid-params";
 import { Fog } from "@busters/agents/fog";
+import { buildTasks as baseBuildTasks, runAuction as baseRunAuction, pMem } from "../../../shared/src/hybrid-core.ts";
 
 // Automatically derive weight keys so ORDER always includes all weights
 const WEIGHT_KEYS = Object.keys(BASE_WEIGHTS) as (keyof typeof BASE_WEIGHTS)[];
@@ -127,13 +128,6 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
   function dist(ax: number, ay: number, bx: number, by: number) { return Math.hypot(ax - bx, ay - by); }
   function norm(dx: number, dy: number) { const d = Math.hypot(dx, dy) || 1; return { x: dx / d, y: dy / d }; }
 
-  const PATROLS: Pt[][] = [
-    [ {x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500} ],
-    [ {x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500} ],
-    [ {x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000} ],
-    [ {x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500} ]
-  ];
-
   function resolveBases(ctx: Ctx): { my: Pt; enemy: Pt } {
     const my = ctx.myBase ?? { x: 0, y: 0 };
     const enemy = ctx.enemyBase ?? { x: W - my.x, y: H - my.y };
@@ -158,19 +152,11 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
     return { x: clamp(raw.x + away.x * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + away.y * TUNE.SPACING_PUSH, 0, H) };
   }
 
-  function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
-    const v = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
-    return { x: clamp(enemyBase.x - v.x * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - v.y * TUNE.BLOCK_RING, 0, H) };
-  }
-
   type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
   type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
   let planTick = -1;
   let planAssign = new Map<number, Task>();
-
-  const pMem = new Map<number, { wp: number }>();
-  function MPatrol(id: number) { if (!pMem.has(id)) pMem.set(id, { wp: 0 }); return pMem.get(id)!; }
 
   const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
   function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
@@ -182,53 +168,6 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
     map.set(self.id, self);
     (friends ?? []).forEach(f => map.set(f.id, f));
     return Array.from(map.values());
-  }
-
-  function buildTasks(ctx: Ctx, meObs: Obs, MY: Pt, EN: Pt): Task[] {
-    const tasks: Task[] = [];
-    const enemies = meObs.enemies ?? [];
-    const ghosts = meObs.ghostsVisible ?? [];
-
-    // INTERCEPT enemy carriers
-    for (const e of enemies) {
-      if (e.state === 1) {
-        const tx = Math.round((e.x + MY.x) / 2);
-        const ty = Math.round((e.y + MY.y) / 2);
-        tasks.push({ type: "INTERCEPT", target: { x: tx, y: ty }, payload: { enemyId: e.id }, baseScore: WEIGHTS.INTERCEPT_BASE });
-      }
-    }
-
-    // DEFEND base if enemies are close
-    const nearThreat = enemies.find(e => dist(e.x, e.y, MY.x, MY.y) <= TUNE.DEFEND_RADIUS);
-    if (nearThreat) {
-      const tx = Math.round((nearThreat.x + MY.x) / 2);
-      const ty = Math.round((nearThreat.y + MY.y) / 2);
-      tasks.push({ type: "DEFEND", target: { x: tx, y: ty }, payload: { enemyId: nearThreat.id }, baseScore: WEIGHTS.DEFEND_BASE + WEIGHTS.DEFEND_NEAR_BONUS });
-    }
-
-    // BUST visible ghosts
-    for (const g of ghosts) {
-      const r = g.range ?? dist(meObs.self.x, meObs.self.y, g.x, g.y);
-      const onRingBonus = (r >= BUST_MIN && r <= BUST_MAX) ? WEIGHTS.BUST_RING_BONUS : 0;
-      const risk = (enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
-      tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
-    }
-
-    // BLOCK enemy base (if no carriers seen)
-    if (!enemies.some(e => e.state === 1)) {
-      tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
-    }
-
-    // EXPLORE: next waypoints from patrols
-    const team = uniqTeam(meObs.self, meObs.friends);
-    for (const mate of team) {
-      const idx = ((mate as any).localIndex ?? 0) % PATROLS.length;
-      const M = MPatrol(mate.id);
-      const path = PATROLS[idx];
-      const wp = M.wp % path.length;
-      tasks.push({ type: "EXPLORE", target: path[wp], payload: { id: mate.id, wp }, baseScore: WEIGHTS.EXPLORE_BASE + TUNE.EXPLORE_STEP_REWARD });
-    }
-    return tasks;
   }
 
   function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt): number {
@@ -246,27 +185,7 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
     return s;
   }
 
-  function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt): Map<number, Task> {
-    const assigned = new Map<number, Task>();
-    const freeB = new Set(team.map(b => b.id));
-    const freeT = new Set(tasks.map((_, i) => i));
-    const S: { b: number; t: number; s: number }[] = [];
-    for (let bi = 0; bi < team.length; bi++) {
-      for (let ti = 0; ti < tasks.length; ti++) {
-        S.push({ b: bi, t: ti, s: scoreAssign(team[bi], tasks[ti], enemies, MY) });
-      }
-    }
-    S.sort((a, b) => b.s - a.s);
-    for (const { b, t } of S) {
-      const bId = team[b].id;
-      if (!freeB.has(bId) || !freeT.has(t)) continue;
-      assigned.set(bId, tasks[t]);
-      freeB.delete(bId);
-      freeT.delete(t);
-      if (freeB.size === 0) break;
-    }
-    return assigned;
-  }
+  
 
   const bot: BotModule = {
     meta: { name: "HybridSubject" },
@@ -337,8 +256,8 @@ export function makeHybridBotFromTW(tw: TW): BotModule {
       // Build plan once per tick
       if (planTick !== tick) {
         const team = friends;
-        const tasks = buildTasks(ctx, obs, MY, EN);
-        planAssign = runAuction(team, tasks, enemies, MY);
+        const tasks = baseBuildTasks(ctx as any, obs as any, MY, EN, TUNE, WEIGHTS);
+        planAssign = baseRunAuction(team, tasks, (b, t) => scoreAssign(b, t, enemies, MY));
         planTick = tick;
       }
 
