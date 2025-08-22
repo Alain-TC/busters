@@ -67,9 +67,9 @@ type Obs = {
 };
 
 /** Memory per buster */
-const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean; wp: number }>();
+const mem = new Map<number, { stunReadyAt: number; radarUsed: boolean }>();
 export const __mem = mem; // exposed for tests
-function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false, wp: 0 }); return mem.get(id)!; }
+function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
 let lastTick = Infinity;
 
 /** Patrol paths used as exploration frontiers (simple & fast) */
