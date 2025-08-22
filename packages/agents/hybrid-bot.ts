@@ -23,6 +23,8 @@ import {
 import { hungarian } from "./hungarian";
 import { clamp, dist, norm } from "@busters/shared";
 
+const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
+
 // Keep one fog instance for the whole team (sim-runner calls act per ally each tick)
 const fog = new Fog();
 
@@ -262,20 +264,22 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
       const P = estimateInterceptPoint(b, enemy, MY);
       const d = dist(b.x, b.y, P.x, P.y);
       s = t.baseScore - d * WEIGHTS.DIST_PEN - d * WEIGHTS.INTERCEPT_DIST_PEN;
-      s += duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE });
-      s += interceptDelta({ me: b, enemy, myBase: MY });
-      s += releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE });
+      s += micro(() => duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE }));
+      s += micro(() => interceptDelta({ me: b, enemy, myBase: MY }));
+      s += micro(() => releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE }));
       const near = (enemy.range ?? dist(b.x, b.y, enemy.x, enemy.y)) <= 2500;
       const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
-      if ((near || threat) && !microOverBudget()) {
-        s += twoTurnInterceptDelta({
-          me: b,
-          enemy,
-          myBase: MY,
-          stunRange: TUNE.STUN_RANGE,
-          canStunMe,
-          canStunEnemy: enemy.state !== 2,
-        });
+      if (near || threat) {
+        s += micro(() =>
+          twoTurnInterceptDelta({
+            me: b,
+            enemy,
+            myBase: MY,
+            stunRange: TUNE.STUN_RANGE,
+            canStunMe,
+            canStunEnemy: enemy.state !== 2,
+          })
+        );
       }
     } else {
       s -= baseD * WEIGHTS.INTERCEPT_DIST_PEN;
@@ -285,28 +289,32 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
   if (t.type === "BUST") {
     const r = dist(b.x, b.y, t.target.x, t.target.y);
     if (r >= BUST_MIN && r <= BUST_MAX) s += WEIGHTS.BUST_RING_BONUS * 0.5;
-    s += contestedBustDelta({
-      me: b,
-      ghost: { x: t.target.x, y: t.target.y, id: t.payload?.ghostId },
-      enemies,
-      bustMin: BUST_MIN,
-      bustMax: BUST_MAX,
-      stunRange: TUNE.STUN_RANGE,
-      canStunMe,
-    });
-    const close = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2500);
-    for (const e of close) {
-      if (microOverBudget()) break;
-      s += twoTurnContestDelta({
+    s += micro(() =>
+      contestedBustDelta({
         me: b,
-        enemy: e,
         ghost: { x: t.target.x, y: t.target.y, id: t.payload?.ghostId },
+        enemies,
         bustMin: BUST_MIN,
         bustMax: BUST_MAX,
         stunRange: TUNE.STUN_RANGE,
         canStunMe,
-        canStunEnemy: e.state !== 2,
-      });
+      })
+    );
+    const close = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2500);
+    for (const e of close) {
+      if (microOverBudget()) break;
+      s += micro(() =>
+        twoTurnContestDelta({
+          me: b,
+          enemy: e,
+          ghost: { x: t.target.x, y: t.target.y, id: t.payload?.ghostId },
+          bustMin: BUST_MIN,
+          bustMax: BUST_MAX,
+          stunRange: TUNE.STUN_RANGE,
+          canStunMe,
+          canStunEnemy: e.state !== 2,
+        })
+      );
     }
   }
 
@@ -328,17 +336,19 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
   if (t.type === "BLOCK") {
     const carrier = enemies.find(e => e.state === 1);
     if (carrier) {
-      s += releaseBlockDelta({ blocker: b, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
-      if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000 && !microOverBudget()) {
-        s += twoTurnContestDelta({
-          me: b,
-          enemy: carrier,
-          bustMin: BUST_MIN,
-          bustMax: BUST_MAX,
-          stunRange: TUNE.STUN_RANGE,
-          canStunMe,
-          canStunEnemy: carrier.state !== 2,
-        });
+      s += micro(() => releaseBlockDelta({ blocker: b, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE }));
+      if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000) {
+        s += micro(() =>
+          twoTurnContestDelta({
+            me: b,
+            enemy: carrier,
+            bustMin: BUST_MIN,
+            bustMax: BUST_MAX,
+            stunRange: TUNE.STUN_RANGE,
+            canStunMe,
+            canStunEnemy: carrier.state !== 2,
+          })
+        );
       }
     }
   }
@@ -490,13 +500,19 @@ export function act(ctx: Ctx, obs: Obs) {
     if (cand) targetEnemy = cand;
   }
   if (canStun && targetEnemy) {
-    const duel = duelStunDelta({
-      me,
-      enemy: targetEnemy,
-      canStunMe: true,
-      canStunEnemy: targetEnemy.state !== 2,
-      stunRange: TUNE.STUN_RANGE,
-    }) + (targetEnemy.state === 1 ? releaseBlockDelta({ blocker: me, carrier: targetEnemy, myBase: MY, stunRange: TUNE.STUN_RANGE }) : 0);
+    const duel =
+      micro(() =>
+        duelStunDelta({
+          me,
+          enemy: targetEnemy,
+          canStunMe: true,
+          canStunEnemy: targetEnemy.state !== 2,
+          stunRange: TUNE.STUN_RANGE,
+        })
+      ) +
+      (targetEnemy.state === 1
+        ? micro(() => releaseBlockDelta({ blocker: me, carrier: targetEnemy, myBase: MY, stunRange: TUNE.STUN_RANGE }))
+        : 0);
     if (duel >= 0) {
       mem.get(me.id)!.stunReadyAt = tick + STUN_CD;
       return finish(dbg({ type: "STUN", busterId: targetEnemy.id }, "STUN", targetEnemy.state === 1 ? "enemy_carrier" : "threat"));
@@ -539,17 +555,20 @@ export function act(ctx: Ctx, obs: Obs) {
       const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
       const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
       const enemy = enemiesAll[0];
-      const deltas = [ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })];
-      if (enemy && !microOverBudget()) {
+      const deltas: number[] = [];
+      deltas.push(micro(() => ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })));
+      if (enemy) {
         deltas.push(
-          twoTurnEjectDelta({
-            me,
-            enemy,
-            target: { x: tx, y: ty },
-            myBase: MY,
-            stunRange: TUNE.STUN_RANGE,
-            canStunEnemy: enemy.state !== 2,
-          })
+          micro(() =>
+            twoTurnEjectDelta({
+              me,
+              enemy,
+              target: { x: tx, y: ty },
+              myBase: MY,
+              stunRange: TUNE.STUN_RANGE,
+              canStunEnemy: enemy.state !== 2,
+            })
+          )
         );
       }
       candidates.push({
@@ -579,15 +598,17 @@ export function act(ctx: Ctx, obs: Obs) {
         for (const e of close) {
           if (microOverBudget()) break;
           deltas.push(
-            twoTurnContestDelta({
-              me: sim,
-              enemy: e,
-              bustMin: BUST_MIN,
-              bustMax: BUST_MAX,
-              stunRange: TUNE.STUN_RANGE,
-              canStunMe: canStun,
-              canStunEnemy: e.state !== 2,
-            })
+            micro(() =>
+              twoTurnContestDelta({
+                me: sim,
+                enemy: e,
+                bustMin: BUST_MIN,
+                bustMax: BUST_MAX,
+                stunRange: TUNE.STUN_RANGE,
+                canStunMe: canStun,
+                canStunEnemy: e.state !== 2,
+              })
+            )
           );
         }
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
@@ -595,13 +616,15 @@ export function act(ctx: Ctx, obs: Obs) {
       }
       const enemy = enemiesAll.find(e => (e.range ?? dist(me.x, me.y, e.x, e.y)) <= TUNE.STUN_RANGE);
       if (enemy && canStun) {
-        const delta = duelStunDelta({
-          me,
-          enemy,
-          canStunMe: true,
-          canStunEnemy: enemy.state !== 2,
-          stunRange: TUNE.STUN_RANGE,
-        });
+        const delta = micro(() =>
+          duelStunDelta({
+            me,
+            enemy,
+            canStunMe: true,
+            canStunEnemy: enemy.state !== 2,
+            stunRange: TUNE.STUN_RANGE,
+          })
+        );
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "carry" });
       }
     }
@@ -614,29 +637,33 @@ export function act(ctx: Ctx, obs: Obs) {
           act: { type: "BUST", ghostId: g.id },
           base: 100,
           deltas: (() => {
-            const base = contestedBustDelta({
-              me,
-              ghost: { x: g.x, y: g.y, id: g.id },
-              enemies: enemiesAll,
-              bustMin: BUST_MIN,
-              bustMax: BUST_MAX,
-              stunRange: TUNE.STUN_RANGE,
-              canStunMe: canStun,
-            });
-            const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
-            let extra = 0;
-            for (const e of close) {
-              if (microOverBudget()) break;
-              extra += twoTurnContestDelta({
+            const base = micro(() =>
+              contestedBustDelta({
                 me,
-                enemy: e,
                 ghost: { x: g.x, y: g.y, id: g.id },
+                enemies: enemiesAll,
                 bustMin: BUST_MIN,
                 bustMax: BUST_MAX,
                 stunRange: TUNE.STUN_RANGE,
                 canStunMe: canStun,
-                canStunEnemy: e.state !== 2,
-              });
+              })
+            );
+            const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
+            let extra = 0;
+            for (const e of close) {
+              if (microOverBudget()) break;
+              extra += micro(() =>
+                twoTurnContestDelta({
+                  me,
+                  enemy: e,
+                  ghost: { x: g.x, y: g.y, id: g.id },
+                  bustMin: BUST_MIN,
+                  bustMax: BUST_MAX,
+                  stunRange: TUNE.STUN_RANGE,
+                  canStunMe: canStun,
+                  canStunEnemy: e.state !== 2,
+                })
+              );
             }
             return [base + extra];
           })(),
@@ -652,29 +679,33 @@ export function act(ctx: Ctx, obs: Obs) {
         const P = spacedTarget(me, { x: px, y: py }, friends);
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
-        const baseDelta = contestedBustDelta({
-          me: sim,
-          ghost: { x: g.x, y: g.y, id: g.id },
-          enemies: enemiesAll,
-          bustMin: BUST_MIN,
-          bustMax: BUST_MAX,
-          stunRange: TUNE.STUN_RANGE,
-          canStunMe: canStun,
-        });
-        const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
-        let extra = 0;
-        for (const e of close) {
-          if (microOverBudget()) break;
-          extra += twoTurnContestDelta({
+        const baseDelta = micro(() =>
+          contestedBustDelta({
             me: sim,
-            enemy: e,
             ghost: { x: g.x, y: g.y, id: g.id },
+            enemies: enemiesAll,
             bustMin: BUST_MIN,
             bustMax: BUST_MAX,
             stunRange: TUNE.STUN_RANGE,
             canStunMe: canStun,
-            canStunEnemy: e.state !== 2,
-          });
+          })
+        );
+        const close = enemiesAll.filter(e => dist(e.x, e.y, g.x, g.y) <= 2500);
+        let extra = 0;
+        for (const e of close) {
+          if (microOverBudget()) break;
+          extra += micro(() =>
+            twoTurnContestDelta({
+              me: sim,
+              enemy: e,
+              ghost: { x: g.x, y: g.y, id: g.id },
+              bustMin: BUST_MIN,
+              bustMax: BUST_MAX,
+              stunRange: TUNE.STUN_RANGE,
+              canStunMe: canStun,
+              canStunEnemy: e.state !== 2,
+            })
+          );
         }
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [baseDelta + extra], tag: "MOVE_RING", reason: `a${i}` });
       }
@@ -692,22 +723,24 @@ export function act(ctx: Ctx, obs: Obs) {
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
         const deltas: number[] = [];
         if (enemy) {
-          deltas.push(interceptDelta({ me: sim, enemy, myBase: MY }));
+          deltas.push(micro(() => interceptDelta({ me: sim, enemy, myBase: MY })));
           deltas.push(
-            releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE })
+            micro(() => releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE }))
           );
           const near = (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= 2500;
           const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
-          if ((near || threat) && !microOverBudget()) {
+          if (near || threat) {
             deltas.push(
-              twoTurnInterceptDelta({
-                me: sim,
-                enemy,
-                myBase: MY,
-                stunRange: TUNE.STUN_RANGE,
-                canStunMe: canStun,
-                canStunEnemy: enemy.state !== 2,
-              })
+              micro(() =>
+                twoTurnInterceptDelta({
+                  me: sim,
+                  enemy,
+                  myBase: MY,
+                  stunRange: TUNE.STUN_RANGE,
+                  canStunMe: canStun,
+                  canStunEnemy: enemy.state !== 2,
+                })
+              )
             );
           }
         }
@@ -715,23 +748,25 @@ export function act(ctx: Ctx, obs: Obs) {
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas, tag: "MOVE_INT", reason: `a${i}` });
       }
       if (enemy && (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= TUNE.STUN_RANGE && canStun) {
-        let delta = duelStunDelta({
-          me,
-          enemy,
-          canStunMe: true,
-          canStunEnemy: enemy.state !== 2,
-          stunRange: TUNE.STUN_RANGE,
-        });
-        if (!microOverBudget()) {
-          delta += twoTurnInterceptDelta({
+        let delta = micro(() =>
+          duelStunDelta({
+            me,
+            enemy,
+            canStunMe: true,
+            canStunEnemy: enemy.state !== 2,
+            stunRange: TUNE.STUN_RANGE,
+          })
+        );
+        delta += micro(() =>
+          twoTurnInterceptDelta({
             me,
             enemy,
             myBase: MY,
             stunRange: TUNE.STUN_RANGE,
             canStunMe: true,
             canStunEnemy: enemy.state !== 2,
-          });
-        }
+          })
+        );
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "intercept" });
       }
     }
@@ -749,13 +784,15 @@ export function act(ctx: Ctx, obs: Obs) {
       }
       const enemy = myTask.payload?.enemyId ? enemiesAll.find(e => e.id === myTask.payload.enemyId) : undefined;
       if (enemy && (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= TUNE.STUN_RANGE && canStun) {
-        const delta = duelStunDelta({
-          me,
-          enemy,
-          canStunMe: true,
-          canStunEnemy: enemy.state !== 2,
-          stunRange: TUNE.STUN_RANGE,
-        });
+        const delta = micro(() =>
+          duelStunDelta({
+            me,
+            enemy,
+            canStunMe: true,
+            canStunEnemy: enemy.state !== 2,
+            stunRange: TUNE.STUN_RANGE,
+          })
+        );
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "support" });
       }
       const ghost = myTask.payload?.ghostId ? ghosts.find(g => g.id === myTask.payload.ghostId) : undefined;
@@ -766,15 +803,17 @@ export function act(ctx: Ctx, obs: Obs) {
             act: { type: "BUST", ghostId: ghost.id },
             base: 100,
             deltas: [
-              contestedBustDelta({
-                me,
-                ghost: { x: ghost.x, y: ghost.y, id: ghost.id },
-                enemies: enemiesAll,
-                bustMin: BUST_MIN,
-                bustMax: BUST_MAX,
-                stunRange: TUNE.STUN_RANGE,
-                canStunMe: canStun,
-              }),
+              micro(() =>
+                contestedBustDelta({
+                  me,
+                  ghost: { x: ghost.x, y: ghost.y, id: ghost.id },
+                  enemies: enemiesAll,
+                  bustMin: BUST_MIN,
+                  bustMax: BUST_MAX,
+                  stunRange: TUNE.STUN_RANGE,
+                  canStunMe: canStun,
+                })
+              ),
             ],
             tag: "BUST_RING",
             reason: "support_bust",
@@ -798,17 +837,19 @@ export function act(ctx: Ctx, obs: Obs) {
       if (myTask.type === "BLOCK") {
         const carrier = enemiesAll.find(e => e.state === 1);
         if (carrier) {
-          let delta = releaseBlockDelta({ blocker: me, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE });
-          if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000 && !microOverBudget()) {
-            delta += twoTurnContestDelta({
-              me,
-              enemy: carrier,
-              bustMin: BUST_MIN,
-              bustMax: BUST_MAX,
-              stunRange: TUNE.STUN_RANGE,
-              canStunMe: canStun,
-              canStunEnemy: carrier.state !== 2,
-            });
+          let delta = micro(() => releaseBlockDelta({ blocker: me, carrier, myBase: MY, stunRange: TUNE.STUN_RANGE }));
+          if (dist(carrier.x, carrier.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000) {
+            delta += micro(() =>
+              twoTurnContestDelta({
+                me,
+                enemy: carrier,
+                bustMin: BUST_MIN,
+                bustMax: BUST_MAX,
+                stunRange: TUNE.STUN_RANGE,
+                canStunMe: canStun,
+                canStunEnemy: carrier.state !== 2,
+              })
+            );
           }
           candidates.push({ act: { type: "MOVE", x: center.x, y: center.y }, base: 100, deltas: [delta], tag: "BLOCK_CORE" });
         }
