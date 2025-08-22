@@ -7,7 +7,7 @@
    - We track radarUsed locally (CG doesn’t give it).
 */
 
-declare function readline(): string;
+declare function readline(): string | undefined | null;
 declare function print(s: string): void;
 
 import { act } from "./hybrid-bot";
@@ -20,9 +20,25 @@ let tick = 0;
 // Track which of our busters already used RADAR (simple local memory)
 const radarUsed = new Set<number>();
 
-const bustersPerPlayer = parseInt(readline(), 10);
-const ghostCount = parseInt(readline(), 10); // value may remain unused
-const myTeamId = parseInt(readline(), 10);
+function safeReadLine(): string | undefined {
+  const line = readline();
+  return line === undefined || line === null ? undefined : line;
+}
+
+function fail(bustersPerPlayer: number) {
+  for (let i = 0; i < bustersPerPlayer; i++) print("WAIT");
+  tick++;
+}
+
+const bpS = safeReadLine();
+const gcS = safeReadLine();
+const mtS = safeReadLine();
+if (bpS === undefined || gcS === undefined || mtS === undefined) {
+  print("WAIT");
+} else {
+  const bustersPerPlayer = parseInt(bpS, 10);
+  const ghostCount = parseInt(gcS, 10); // value may remain unused
+  const myTeamId = parseInt(mtS, 10);
 
 const myBase: Pt = myTeamId === 0 ? { x: 0, y: 0 } : { x: W, y: H };
 const enemyBase: Pt = myTeamId === 0 ? { x: W, y: H } : { x: 0, y: 0 };
@@ -30,17 +46,24 @@ const ctx = { myBase, enemyBase, bounds: { w: W, h: H } };
 
 function d(a: Pt, b: Pt) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
-while (true) {
-  const n = Number(readline());
-  if (Number.isNaN(n)) break;
+outer: while (true) {
+  const nLine = safeReadLine();
+  if (nLine === undefined) break;
+  const n = Number(nLine);
+  if (Number.isNaN(n)) { fail(bustersPerPlayer); continue; }
 
   const my: any[] = [];
   const opp: any[] = [];
   const ghosts: any[] = [];
 
   for (let i = 0; i < n; i++) {
-    const [idS, xS, yS, tS, sS, vS] = readline().split(" ");
+    const entityLine = safeReadLine();
+    if (entityLine === undefined) { fail(bustersPerPlayer); continue outer; }
+    const tokens = entityLine.trim().split(" ");
+    if (tokens.length !== 6) { fail(bustersPerPlayer); continue outer; }
+    const [idS, xS, yS, tS, sS, vS] = tokens;
     const id = +idS, x = +xS, y = +yS, type = +tS, state = +sS, value = +vS;
+    if ([id, x, y, type, state, value].some(Number.isNaN)) { fail(bustersPerPlayer); continue outer; }
     if (type === myTeamId) my.push({ id, x, y, state, value });
     else if (type === 1 - myTeamId) opp.push({ id, x, y, state, value });
     else ghosts.push({ id, x, y, stamina: state, value });
@@ -112,5 +135,7 @@ while (true) {
   for (let i = 0; i < bustersPerPlayer; i++) print(lines[i] || `MOVE ${myBase.x} ${myBase.y}`);
 
   tick++;
+}
+
 }
 
