@@ -1,6 +1,7 @@
 import { runEpisodes } from "../runEpisodes";
 import { DEFAULT_HYBRID_PARAMS, HYBRID_ORDER, HYBRID_BOUNDS, fromVector } from "@busters/agents/hybrid-params";
 import { setHybridParams } from "@busters/agents/hybrid-bot";
+import { defaultSigmas } from "../subjects";
 
 function clampVec(vec: number[]) {
   return vec.map((v, i) => {
@@ -14,7 +15,7 @@ function clampVec(vec: number[]) {
 
 export const HYBRID_DIM   = HYBRID_ORDER.length;
 export const HYBRID_MEAN  = HYBRID_ORDER.map(k => DEFAULT_HYBRID_PARAMS[k]);
-export const HYBRID_SIGMA = HYBRID_ORDER.map(() => 0.15);
+export const HYBRID_SIGMA = defaultSigmas();
 export const HYBRID_CLIP  = {
   lo: HYBRID_ORDER.map(k => HYBRID_BOUNDS[k].lo),
   hi: HYBRID_ORDER.map(k => HYBRID_BOUNDS[k].hi),
