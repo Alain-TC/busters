@@ -12,6 +12,8 @@ const ALIASES: Record<string, string> = {
   greedy: "@busters/agents/greedy",
   stunner: "@busters/agents/stunner",
   camper: "@busters/agents/camper",
+  "base-camper": "@busters/agents/base-camper",
+  "aggressive-stunner": "@busters/agents/aggressive-stunner",
   random: "@busters/agents/random",
   defender: "@busters/agents/defender",
   scout: "@busters/agents/scout",
