@@ -1,6 +1,7 @@
 // packages/sim-runner/src/cli.ts
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { loadBotModule } from './loadBots';
 import { runEpisodes } from './runEpisodes';
 import { runRoundRobin } from './tournament';
@@ -17,6 +18,8 @@ import {
 
 import { selectOpponentsPFSP } from './pfsp';
 import { loadEloTable, saveEloTable, updateElo } from './elo';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /* --------------------- CLI helpers --------------------- */
 function getFlag(args: string[], name: string, def?: any) {
@@ -322,7 +325,7 @@ async function trainHybridCMA(cfg: CmaCfg) {
 
 /* ---------------- Post-train utilities ---------------- */
 function writeHybridParams(tw: { TUNE: any; WEIGHTS: any }) {
-  const out = path.resolve('packages/agents/hybrid-params.ts');
+  const out = path.resolve(__dirname, '../../agents/hybrid-params.ts');
   const content = `// packages/agents/hybrid-params.ts\n` +
     `// -----------------------------------------------------------------------------\n` +
     `// Hybrid parameters (auto-updated).\n` +
@@ -346,8 +349,8 @@ function writeHybridParams(tw: { TUNE: any; WEIGHTS: any }) {
 async function pfspEvalAndRefreshHOF(args: { tw: any; oppNames: string[]; seedsPer: number; episodesPerSeed: number; pfspCount: number; }) {
   const { tw, oppNames, seedsPer, episodesPerSeed, pfspCount } = args;
   const candNames = Array.from(new Set([...oppNames, 'hof']));
-  const eloPath = path.resolve('packages/sim-runner/artifacts/elo.json');
-  const championPath = path.resolve('packages/agents/champion-bot.js');
+  const eloPath = path.resolve(__dirname, '../artifacts/elo.json');
+  const championPath = path.resolve(__dirname, '../../agents/champion-bot.js');
   const elo = loadEloTable(eloPath);
 
   const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo }).map(p => p.id);
@@ -474,7 +477,7 @@ async function main() {
 
     if (subject === 'hybrid') {
       const oppNames = oppPoolArg.split(',').map(s=>s.trim()).filter(Boolean);
-      const artDir = path.resolve('packages/sim-runner/artifacts');
+      const artDir = path.resolve(__dirname, '../artifacts');
 
       if (algo === 'cma') {
         const best = await trainHybridCMA({
