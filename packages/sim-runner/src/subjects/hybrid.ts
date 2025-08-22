@@ -62,7 +62,7 @@ export function twFromVec(vec: number[]): TW {
     return idx >= 0 && Number.isFinite(vec[idx]) ? vec[idx] : def;
   };
   const TUNE = {
-    RELEASE_DIST: Math.round(clamp(pick("TUNE.RELEASE_DIST", BASE_TUNE.RELEASE_DIST), 1200, 2000)),
+    RELEASE_DIST: Math.round(clamp(pick("TUNE.RELEASE_DIST", BASE_TUNE.RELEASE_DIST), 1200, 1600)),
     STUN_RANGE: Math.round(clamp(pick("TUNE.STUN_RANGE", BASE_TUNE.STUN_RANGE), 1650, 1850)),
     RADAR1_TURN: Math.round(clamp(pick("TUNE.RADAR1_TURN", BASE_TUNE.RADAR1_TURN), 0, 5)),
     RADAR2_TURN: Math.round(clamp(pick("TUNE.RADAR2_TURN", BASE_TUNE.RADAR2_TURN), 40, 70)),

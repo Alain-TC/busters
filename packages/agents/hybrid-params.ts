@@ -37,7 +37,7 @@ export type Weights = {
 // DEFAULTS (safe, reasonable). The trainer will usually overwrite these.
 // -----------------------------------------------------------------------------
 export const TUNE: Tune = {
-  RELEASE_DIST: 1628,
+  RELEASE_DIST: 1600,
   STUN_RANGE: 1810,
   RADAR1_TURN: 1,
   RADAR2_TURN: 58,

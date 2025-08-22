@@ -1,6 +1,6 @@
 /** Auto-generated from CMA-ES best_hybrid.json — do not edit by hand */
 export const TUNE = {
-  "RELEASE_DIST": 1632,
+  "RELEASE_DIST": 1600,
   "STUN_RANGE": 1834,
   "RADAR1_TURN": 2,
   "RADAR2_TURN": 55,
