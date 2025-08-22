@@ -88,7 +88,10 @@ export function twFromVec(vec: number[]): TW {
     DEFEND_NEAR_BONUS: Math.round(clamp(pick("WEIGHTS.DEFEND_NEAR_BONUS", BASE_WEIGHTS.DEFEND_NEAR_BONUS), 0, 10)),
     BLOCK_BASE: Math.round(clamp(pick("WEIGHTS.BLOCK_BASE", BASE_WEIGHTS.BLOCK_BASE), 0, 12)),
     EXPLORE_BASE: Math.round(clamp(pick("WEIGHTS.EXPLORE_BASE", BASE_WEIGHTS.EXPLORE_BASE), 0, 10)),
+    SUPPORT_BASE: Math.round(clamp(pick("WEIGHTS.SUPPORT_BASE", BASE_WEIGHTS.SUPPORT_BASE), 0, 12)),
     DIST_PEN: clamp(pick("WEIGHTS.DIST_PEN", BASE_WEIGHTS.DIST_PEN), 0.0005, 0.02),
+    CARRY_BASE: Math.round(clamp(pick("WEIGHTS.CARRY_BASE", BASE_WEIGHTS.CARRY_BASE), 6, 20)),
+    CARRY_ENEMY_NEAR_PEN: Math.round(clamp(pick("WEIGHTS.CARRY_ENEMY_NEAR_PEN", BASE_WEIGHTS.CARRY_ENEMY_NEAR_PEN), 0, 8)),
   } as const;
 
   return { TUNE, WEIGHTS };
