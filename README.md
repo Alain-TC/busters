@@ -11,7 +11,7 @@ Evolves a [CodinGame "Busters"](https://www.codingame.com/multiplayer/bot-progra
 - [View Replays](#view-replays)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
-- [EVOL2 Strategy](docs/EVOL2.md)
+ - [EVOL2 Milestones](docs/EVOL2.md#milestones-at-a-glance)
 
 ## Current Status
 - Serial sanity ✅
@@ -60,17 +60,25 @@ pnpm -C packages/sim-runner start train \
 ```
 
 ## Export a CodinGame Bot
-Generate a single-file `agents/codingame-bot.js` (no imports; uses `readline()` + `console.log()`):
+Follow these steps to bundle the latest tuned genome into a single-file bot:
 
+1. Ensure training has produced a genome JSON in `artifacts/` or `packages/sim-runner/artifacts/`.
+2. Run the exporter (auto-detects the most recent genome):
+   ```bash
+   pnpm cg:export:genome
+   ```
+   This writes `agents/codingame-bot.js` with a version tag for traceability.
+3. Copy `agents/codingame-bot.js` into the CodinGame IDE.
+
+Other variants:
 ```bash
-pnpm cg:export:genome   # best genome → agents/codingame-bot.js
 pnpm cg:export:hybrid   # baseline hybrid bot
 pnpm cg:export:champ    # champion from tournament standings
 ```
 
-`cg:export:genome` reads `packages/sim-runner/artifacts/simrunner_best_genome.json` (or `artifacts/simrunner_best_genome.json` if present). `cg:export:champ` picks the top entry in `packages/sim-runner/artifacts/tournament_standings.json`. Paste the resulting `agents/codingame-bot.js` into the CodinGame IDE.
+For long training runs, `scripts/train_long.sh` invokes the exporter automatically and writes `agents/evolved-bot.cg.js`.
 
-The long training helper (`scripts/train_long.sh`) runs this exporter automatically, writing `agents/evolved-bot.cg.js` with a full `readline()`/`console.log()` loop and without optional chaining so it executes in the CodinGame IDE.
+See the [EVOL2 milestones](docs/EVOL2.md#milestones-at-a-glance) for project progress.
 
 ## Run Local Tournaments
 Short names `greedy`, `random`, `evolved` are resolved by the loader to absolute file paths.

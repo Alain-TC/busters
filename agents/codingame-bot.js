@@ -1,6 +1,7 @@
 /**
  * CodinGame Busters — EVOL2 exporter
  * Single-file bot generated from local training/tournament artifacts.
+ * Version 6683eee — exported 2025-08-21T21:16:16.933Z
  */
 
 const W = 16000, H = 9000;
@@ -24,9 +25,9 @@ let tick = 0;
 const mem = new Map();
 function getMem(id){ if(!mem.has(id)) mem.set(id,{stunReadyAt:0,radarUsed:false,wp:0}); return mem.get(id); }
 
-const RELEASE_DIST = 1583;
-const STUN_RANGE   = 1589;
-const RADAR_TURN   = 6;
+const RELEASE_DIST = 1600;
+const STUN_RANGE   = 1766;
+const RADAR_TURN   = 23;
 
 // Simple patrols to spread out when nothing visible
 const PATROLS = [
@@ -70,14 +71,8 @@ while (true) {
     // 2) STUN priority: enemy carrying within STUN_RANGE, else nearest enemy within BUST_MAX
     const canStun = (tick >= m.stunReadyAt) && !stunned;
     let toStun = null;
-    for (const er of enemiesR){
-      if (er.e.state === 2) continue;
-      if (er.e.state===1 && er.r <= STUN_RANGE) { toStun = er.e; break; }
-    }
-    if (!toStun){
-      const cand = enemiesR.find(er => er.e.state !== 2 && er.r <= BUST_MAX);
-      if (cand) toStun = cand.e;
-    }
+    for (const er of enemiesR){ if (er.e.state===1 && er.r <= STUN_RANGE) { toStun = er.e; break; } }
+    if (!toStun && enemiesR.length && enemiesR[0].r <= BUST_MAX) toStun = enemiesR[0].e;
     if (canStun && toStun){ actions[ai] = 'STUN '+toStun.id; m.stunReadyAt = tick + STUN_CD; continue; }
 
     // 3) RADAR once at RADAR_TURN by scout
