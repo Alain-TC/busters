@@ -178,6 +178,19 @@ test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
   assert.ok(s1 > s2);
 });
 
+test('scoreAssign ignores distant enemies for bust tasks', () => {
+  __mem.clear();
+  const b: any = { id: 1, x: 0, y: 0 };
+  const task: any = { type: 'BUST', target: { x: 0, y: 0 }, payload: { ghostId: 1 }, baseScore: 0 };
+  const farEnemy: any = { id: 2, x: 10000, y: 10000 };
+  const MY = { x: 0, y: 0 };
+  const st = new HybridState();
+  st.updateRoles([b]);
+  const s1 = __scoreAssign(b, task, [], MY, 0, st);
+  const s2 = __scoreAssign(b, task, [farEnemy], MY, 0, st);
+  assert.equal(s1, s2);
+});
+
 test('ejects when threatened and stun on cooldown', () => {
   __mem.clear();
   const ctx: any = { myBase: { x: 0, y: 0 } };
