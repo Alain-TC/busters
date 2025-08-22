@@ -76,6 +76,7 @@ async function evalHybridVector(
 ) {
   const tw = twFromVec(vec);
   const botA = makeHybridBotFromTW(tw);
+  const rng = mulberry32(baseSeed >>> 0);
 
   let games = 0, wins = 0, draws = 0, losses = 0;
   let diffSum = 0;
@@ -90,6 +91,7 @@ async function evalHybridVector(
         meId: 'hybrid',
         candidates: oppsAll.map(o => o.name),
         n: pfspCount,
+        rng,
       }).map(p => p.id);
       const set = new Set(picked);
       opps = oppsAll.filter(o => set.has(o.name));
@@ -332,14 +334,14 @@ function writeHybridParams(tw: { TUNE: any; WEIGHTS: any }) {
   console.log(`Wrote -> ${out}`);
 }
 
-async function pfspEvalAndRefreshHOF(args: { tw: any; oppNames: string[]; seedsPer: number; episodesPerSeed: number; pfspCount: number; }) {
-  const { tw, oppNames, seedsPer, episodesPerSeed, pfspCount } = args;
+async function pfspEvalAndRefreshHOF(args: { tw: any; oppNames: string[]; seedsPer: number; episodesPerSeed: number; pfspCount: number; rng?: () => number; }) {
+  const { tw, oppNames, seedsPer, episodesPerSeed, pfspCount, rng = Math.random } = args;
   const candNames = Array.from(new Set([...oppNames, 'hof']));
   const eloPath = path.resolve(__dirname, '../artifacts/elo.json');
   const championPath = path.resolve(__dirname, '../../agents/champion-bot.js');
   const elo = loadEloTable(eloPath);
 
-  const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo }).map(p => p.id);
+  const picks = selectOpponentsPFSP({ meId: 'hybrid', candidates: candNames, n: Math.min(pfspCount, candNames.length), elo, rng }).map(p => p.id);
   const opps = await resolveOppPool(picks);
   const botA = makeHybridBotFromTW(tw);
 
@@ -476,7 +478,7 @@ async function main() {
           logBest,
         });
         writeHybridParams(best.tw);
-        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount });
+        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount, rng: mulberry32(seed >>> 0) });
         return;
       }
 
@@ -491,7 +493,7 @@ async function main() {
           logBest,
         });
         writeHybridParams(best.tw);
-        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount });
+        await pfspEvalAndRefreshHOF({ tw: best.tw, oppNames, seedsPer, episodesPerSeed, pfspCount, rng: mulberry32(seed >>> 0) });
         return;
       }
 
