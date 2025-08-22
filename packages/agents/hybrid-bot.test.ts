@@ -222,6 +222,16 @@ test('does not eject when stun ready', () => {
   assert.notEqual(actRes.type, 'EJECT');
 });
 
+test('releases when carrying inside base radius', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  act(ctx, { tick: 0, self: { id: 99, x: 0, y: 0, state: 0 }, friends: [], enemies: [], ghostsVisible: [] });
+  const self = { id: 1, x: 1000, y: 1000, state: 1, stunCd: 5 };
+  const obs: any = { tick: 20, self, friends: [], enemies: [], ghostsVisible: [] };
+  const actRes = act(ctx, obs);
+  assert.equal(actRes.type, 'RELEASE');
+});
+
 test('buildTasks emits carry tasks for carriers', () => {
   const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
   const self: any = { id: 1, x: 1000, y: 1000, state: 1 };
