@@ -111,6 +111,23 @@ test('runAuction aligns with Hungarian optimal assignment', () => {
   }
 });
 
+test('runAuction uses greedy assignment when combinations exceed 100', () => {
+  const team = Array.from({ length: 11 }, (_, i) => ({ id: i + 1, x: i * 100, y: 0 }));
+  const tasks = Array.from({ length: 10 }, (_, i) => ({ type: 'EXPLORE', target: { x: i * 100, y: 0 }, baseScore: 100 }));
+  const enemies: any[] = [];
+  const MY = { x: 0, y: 0 };
+  const tick = 0;
+
+  const st = new HybridState();
+  st.updateRoles(team as any);
+  const assigned = __runAuction(team as any, tasks as any, enemies, MY, tick, st);
+  assert.equal(assigned.size, tasks.length);
+  for (let i = 0; i < tasks.length; i++) {
+    assert.strictEqual(assigned.get(team[i].id), tasks[i]);
+  }
+  assert.ok(!assigned.has(team[10].id));
+});
+
 test('bot does not stun an already stunned enemy', () => {
   __mem.clear();
   const ctx: any = {};
