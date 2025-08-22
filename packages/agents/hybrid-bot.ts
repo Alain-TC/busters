@@ -102,7 +102,7 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 }
 
 /** ---- Auction / Task machinery ---- */
-type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE";
+type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
 /** Shared per-tick plan cache (computed once, read by all) */
@@ -120,6 +120,8 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   const tasks: Task[] = [];
   const enemies = meObs.enemies ?? [];
   const ghosts = meObs.ghostsVisible ?? [];
+  const team = uniqTeam(meObs.self, meObs.friends);
+  const tick = ctx.tick ?? meObs.tick ?? 0;
 
   // INTERCEPT enemy carriers (visible)
   for (const e of enemies) {
@@ -160,6 +162,32 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
     const onRingBonus = (r >= BUST_MIN && r <= BUST_MAX) ? WEIGHTS.BUST_RING_BONUS : 0;
     const risk = (enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200).length) * WEIGHTS.BUST_ENEMY_NEAR_PEN;
     tasks.push({ type: "BUST", target: { x: g.x, y: g.y }, payload: { ghostId: g.id }, baseScore: WEIGHTS.BUST_BASE + onRingBonus - risk });
+
+    // SUPPORT contested busts
+    const alliesNear = team.filter(f => dist(f.x, f.y, g.x, g.y) <= BUST_MAX);
+    const enemiesNear = enemies.filter(e => dist(e.x, e.y, g.x, g.y) <= 2200);
+    if (alliesNear.length && enemiesNear.length) {
+      tasks.push({
+        type: "SUPPORT",
+        target: { x: g.x, y: g.y },
+        payload: { ghostId: g.id, allyIds: alliesNear.map(a => a.id) },
+        baseScore: WEIGHTS.SUPPORT_BASE + enemiesNear.length,
+      });
+    }
+  }
+
+  // SUPPORT stun chains on enemies
+  for (const e of enemies) {
+    const alliesNear = team.filter(f => f.id !== e.id && dist(f.x, f.y, e.x, e.y) <= TUNE.STUN_RANGE);
+    const ready = alliesNear.some(a => M(a.id).stunReadyAt <= tick);
+    if (alliesNear.length && ready) {
+      tasks.push({
+        type: "SUPPORT",
+        target: { x: e.x, y: e.y },
+        payload: { enemyId: e.id, allyIds: alliesNear.map(a => a.id) },
+        baseScore: WEIGHTS.SUPPORT_BASE + alliesNear.length,
+      });
+    }
   }
 
   // BLOCK enemy base (if no carriers seen)
@@ -168,7 +196,6 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
   }
 
   // EXPLORE: coarse frontier via shared state (fallback to patrols)
-  const team = uniqTeam(meObs.self, meObs.friends);
   const early = (ctx.tick ?? meObs.tick ?? 0) < 5;
   for (const mate of team) {
     let target: Pt | undefined;
@@ -229,6 +256,13 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number): num
       stunRange: TUNE.STUN_RANGE,
       canStunMe,
     });
+  }
+
+  if (t.type === "SUPPORT") {
+    const enemiesNear = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= 2200).length;
+    const allies = (t.payload?.allyIds?.length ?? 0);
+    s += (enemiesNear - allies) * (WEIGHTS.DEFEND_NEAR_BONUS * 0.5);
+    if (canStunMe) s += WEIGHTS.DEFEND_NEAR_BONUS;
   }
 
   if (t.type === "BLOCK") {
@@ -468,6 +502,53 @@ export function act(ctx: Ctx, obs: Obs) {
           stunRange: TUNE.STUN_RANGE,
         });
         candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "intercept" });
+      }
+    }
+
+    if (myTask.type === "SUPPORT") {
+      const center = myTask.target;
+      const radius = 400;
+      for (let i = 0; i < 6; i++) {
+        const ang = (Math.PI * 2 * i) / 6;
+        const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
+        const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
+        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: "MOVE_SUP", reason: `a${i}` });
+      }
+      const enemy = myTask.payload?.enemyId ? enemiesAll.find(e => e.id === myTask.payload.enemyId) : undefined;
+      if (enemy && (enemy.range ?? dist(me.x, me.y, enemy.x, enemy.y)) <= TUNE.STUN_RANGE && canStun) {
+        const delta = duelStunDelta({
+          me,
+          enemy,
+          canStunMe: true,
+          canStunEnemy: enemy.state !== 2,
+          stunRange: TUNE.STUN_RANGE,
+        });
+        candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "support" });
+      }
+      const ghost = myTask.payload?.ghostId ? ghosts.find(g => g.id === myTask.payload.ghostId) : undefined;
+      if (ghost) {
+        const r = dist(me.x, me.y, ghost.x, ghost.y);
+        if (r >= BUST_MIN && r <= BUST_MAX) {
+          candidates.push({
+            act: { type: "BUST", ghostId: ghost.id },
+            base: 100,
+            deltas: [
+              contestedBustDelta({
+                me,
+                ghost: { x: ghost.x, y: ghost.y, id: ghost.id },
+                enemies: enemiesAll,
+                bustMin: BUST_MIN,
+                bustMax: BUST_MAX,
+                stunRange: TUNE.STUN_RANGE,
+                canStunMe: canStun,
+              }),
+            ],
+            tag: "BUST_RING",
+            reason: "support_bust",
+          });
+        }
       }
     }
 
