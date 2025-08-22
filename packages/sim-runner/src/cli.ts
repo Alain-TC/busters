@@ -22,12 +22,15 @@ import { loadEloTable, saveEloTable, updateElo } from './elo';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /* --------------------- CLI helpers --------------------- */
-function getFlag(args: string[], name: string, def?: any) {
+export function getFlag(args: string[], name: string, def?: any) {
   const i = args.indexOf(`--${name}`);
-  if (i >= 0) return args[i+1] ?? true;
+  if (i >= 0) {
+    const value = args[i + 1];
+    return value !== undefined ? value : def;
+  }
   return def;
 }
-function getBool(args: string[], name: string, def=false) {
+export function getBool(args: string[], name: string, def=false) {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? true : def;
 }
