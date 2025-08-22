@@ -372,11 +372,14 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
 }
 
 /** Auction/assignment: use Hungarian for optimal matching when manageable */
+export const HUNGARIAN_MAX_COMBOS = Number(
+  (typeof process !== "undefined" ? process.env.HUNGARIAN_MAX_COMBOS : undefined) ?? 100
+);
 function runAuction(team: Ent[], tasks: Task[], enemies: Ent[], MY: Pt, tick: number, state: HybridState): Map<number, Task> {
   const assigned = new Map<number, Task>();
 
   // Use Hungarian when both team and task sizes are reasonable
-  if (team.length && tasks.length && team.length * tasks.length <= 100) {
+  if (team.length && tasks.length && team.length * tasks.length <= HUNGARIAN_MAX_COMBOS) {
     const cost = team.map(b =>
       tasks.map(t => -scoreAssign(b, t, enemies, MY, tick, state))
     );

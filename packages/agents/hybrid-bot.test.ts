@@ -128,6 +128,25 @@ test('runAuction uses greedy assignment when combinations exceed 100', () => {
   assert.ok(!assigned.has(team[10].id));
 });
 
+test('runAuction respects HUNGARIAN_MAX_COMBOS override', async () => {
+  process.env.HUNGARIAN_MAX_COMBOS = '50';
+  const mod = await import('./hybrid-bot.ts?override');
+  const { __runAuction, HUNGARIAN_MAX_COMBOS } = mod;
+  const { HybridState } = await import('./lib/state.ts');
+  assert.equal(HUNGARIAN_MAX_COMBOS, 50);
+  const team = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, x: i * 100, y: 0 }));
+  const tasks = Array.from({ length: 7 }, (_, i) => ({ type: 'EXPLORE', target: { x: i * 100, y: 0 }, baseScore: 100 }));
+  const enemies: any[] = [];
+  const MY = { x: 0, y: 0 };
+  const tick = 0;
+  const st = new HybridState();
+  st.updateRoles(team as any);
+  const assigned = __runAuction(team as any, tasks as any, enemies, MY, tick, st);
+  assert.equal(assigned.size, tasks.length);
+  assert.ok(!assigned.has(team[7].id));
+  delete process.env.HUNGARIAN_MAX_COMBOS;
+});
+
 test('bot does not stun an already stunned enemy', () => {
   __mem.clear();
   const ctx: any = {};
