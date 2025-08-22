@@ -8,7 +8,7 @@ export type EloTable = Record<string, number>;
 const DEFAULT_ELO = 1000;
 const K_FACTOR = 32;
 const ARTIFACTS = path.resolve("artifacts");
-const ELO_PATH = path.resolve(ARTIFACTS, "elo.json");
+const ELO_PATH = process.env.ELO_PATH || path.resolve(ARTIFACTS, "elo.json");
 
 /** Ensure artifacts dir exists */
 function ensureArtifactsDir() {
