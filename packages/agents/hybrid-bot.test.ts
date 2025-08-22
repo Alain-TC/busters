@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog } from './hybrid-bot';
+import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog, buildPlan, executePlan } from './hybrid-bot';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -207,6 +207,32 @@ test('scoreAssign ignores distant enemies for bust tasks', () => {
   const s1 = __scoreAssign(b, task, [], MY, 0, st);
   const s2 = __scoreAssign(b, task, [farEnemy], MY, 0, st);
   assert.equal(s1, s2);
+});
+
+test('drops bust when assigned ghost disappears', () => {
+  __mem.clear();
+  const ctx: any = { tick: 0, myBase: { x: 0, y: 0 }, enemyBase: { x: 16000, y: 9000 } };
+  const b1: any = { id: 1, x: 0, y: 0, state: 0 };
+  const b2: any = { id: 2, x: 5000, y: 0, state: 0 };
+  const g1 = { id: 1, x: 5200, y: 0, range: 200 };
+  const obs1: any = { tick: 0, self: b1, friends: [b2], enemies: [], ghostsVisible: [g1] };
+  const state = new HybridState();
+  state.updateRoles([b1, b2]);
+  buildPlan({ ctx, obs: obs1, state, friends: [b1, b2], enemiesAll: [], MY: ctx.myBase, EN: ctx.enemyBase, tick: 0 });
+
+  // b2 executes plan; assigned ghost g1 disappeared and g2 is visible
+  const g2 = { id: 2, x: 6000, y: 0, range: 1000 };
+  const action = executePlan({
+    me: b2,
+    friends: [b1],
+    enemies: [],
+    enemiesAll: [],
+    ghosts: [g2],
+    carrying: false,
+    canStun: false,
+    MY: ctx.myBase,
+  });
+  assert.equal(action.type, 'MOVE');
 });
 
 test('ejects when threatened and stun on cooldown', () => {

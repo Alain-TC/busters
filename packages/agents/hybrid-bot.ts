@@ -631,51 +631,53 @@ export function executePlan(args: ExecuteArgs) {
     }
 
     if (myTask.type === "BUST" && ghosts.length) {
-      const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId) ?? ghosts[0];
-      const r = dist(me.x, me.y, g.x, g.y);
-      if (r >= BUST_MIN && r <= BUST_MAX) {
-        const deltas: number[] = [];
-        deltas.push(
-          micro(() =>
-            contestedBustDelta({
-              me,
-              ghost: { x: g.x, y: g.y, id: g.id },
-              enemies: enemiesAll,
-              bustMin: BUST_MIN,
-              bustMax: BUST_MAX,
-              stunRange: TUNE.STUN_RANGE,
-              canStunMe: canStun,
-            })
-          )
-        );
-        candidates.push({ act: { type: "BUST", ghostId: g.id }, base: 100, deltas, tag: "BUST_RING", reason: "carry" });
-      } else {
-        const center = g;
-        const radius = 400;
-        const baseDelta = 100 - dist(me.x, me.y, g.x, g.y) * 0.01;
-        for (let i = 0; i < 6; i++) {
-          const ang = (Math.PI * 2 * i) / 6;
-          const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
-          const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-          const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
-          const sim = { id: me.id, x: P.x, y: P.y } as Ent;
-          let extra = 0;
-          for (const e of enemiesAll) {
-            if (microOverBudget()) break;
-            extra += micro(() =>
-              twoTurnContestDelta({
-                me: sim,
-                enemy: e,
+      const g = ghosts.find(gg => gg.id === myTask.payload?.ghostId);
+      if (g) {
+        const r = dist(me.x, me.y, g.x, g.y);
+        if (r >= BUST_MIN && r <= BUST_MAX) {
+          const deltas: number[] = [];
+          deltas.push(
+            micro(() =>
+              contestedBustDelta({
+                me,
                 ghost: { x: g.x, y: g.y, id: g.id },
+                enemies: enemiesAll,
                 bustMin: BUST_MIN,
                 bustMax: BUST_MAX,
                 stunRange: TUNE.STUN_RANGE,
                 canStunMe: canStun,
-                canStunEnemy: e.state !== 2,
               })
-            );
+            )
+          );
+          candidates.push({ act: { type: "BUST", ghostId: g.id }, base: 100, deltas, tag: "BUST_RING", reason: "carry" });
+        } else {
+          const center = g;
+          const radius = 400;
+          const baseDelta = 100 - dist(me.x, me.y, g.x, g.y) * 0.01;
+          for (let i = 0; i < 6; i++) {
+            const ang = (Math.PI * 2 * i) / 6;
+            const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
+            const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
+            const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
+            const sim = { id: me.id, x: P.x, y: P.y } as Ent;
+            let extra = 0;
+            for (const e of enemiesAll) {
+              if (microOverBudget()) break;
+              extra += micro(() =>
+                twoTurnContestDelta({
+                  me: sim,
+                  enemy: e,
+                  ghost: { x: g.x, y: g.y, id: g.id },
+                  bustMin: BUST_MIN,
+                  bustMax: BUST_MAX,
+                  stunRange: TUNE.STUN_RANGE,
+                  canStunMe: canStun,
+                  canStunEnemy: e.state !== 2,
+                })
+              );
+            }
+            candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base: 100, deltas: [baseDelta + extra], tag: "MOVE_RING", reason: `a${i}` });
           }
-          candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base: 100, deltas: [baseDelta + extra], tag: "MOVE_RING", reason: `a${i}` });
         }
       }
     }
