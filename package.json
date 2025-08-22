@@ -19,7 +19,9 @@
     "pfsp:report": "tsx scripts/pfsp-report.ts",
     "cg:export:genome": "tsx scripts/export-codingame.ts --from genome --in packages/sim-runner/artifacts/simrunner_best_genome.json --out agents/codingame-bot.js",
     "cg:export:hybrid": "tsx scripts/export-codingame.ts --from hybrid --out agents/codingame-bot.js",
-    "cg:export:champ": "tsx scripts/export-champion.ts --standings packages/sim-runner/artifacts/tournament_standings.json --out agents/codingame-bot.js"
+    "cg:export:champ": "tsx scripts/export-champion.ts --standings packages/sim-runner/artifacts/tournament_standings.json --out agents/codingame-bot.js",
+    "cg:export:patrol-a": "tsx scripts/export-codingame.ts --from genome --patrol a --in packages/sim-runner/artifacts/simrunner_best_genome.json --out agents/codingame-bot.js",
+    "cg:export:patrol-b": "tsx scripts/export-codingame.ts --from genome --patrol b --in packages/sim-runner/artifacts/simrunner_best_genome.json --out agents/codingame-bot.js"
   },
   "devDependencies": {
     "tsx": "^4.20.4",

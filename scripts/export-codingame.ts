@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { TUNE as TUNE_DEFAULT, WEIGHTS as WEIGHTS_DEFAULT } from "../packages/agents/hybrid-params";
+import { PATROL_PATHS, PatrolPaths } from "../packages/agents/patrols";
 
 type Genome = { radarTurn: number; stunRange: number; releaseDist: number };
 type TW = { TUNE: any; WEIGHTS: any };
@@ -28,6 +29,7 @@ const mode = arg("--from", "genome"); // "genome" | "hybrid"
 const outPath = arg("--out", "agents/codingame-bot.js");
 const weightsPath = arg("--weights", "");
 const inArg = arg("--in", "");
+const patrolStyle = arg("--patrol", "a");
 
 function findLatestGenome(): string {
   const dirs = ["packages/sim-runner/artifacts", "artifacts"];
@@ -98,19 +100,15 @@ function cgHeader(meta: string): string {
 }
 
 // --- GENOME bot (very small rule-set param’d by radarTurn/stunRange/releaseDist)
-function makeGenomeBot(g: Genome, meta: string): string {
+function makeGenomeBot(g: Genome, meta: string, patrols: PatrolPaths): string {
+  const patrolStr = JSON.stringify(patrols);
   const body = [
     `const RELEASE_DIST = ${g.releaseDist};`,
     `const STUN_RANGE   = ${g.stunRange};`,
     `const RADAR_TURN   = ${g.radarTurn};`,
     "",
     "// Simple patrols to spread out when nothing visible",
-    "const PATROLS = [",
-    "  [{x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500}],",
-    "  [{x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500}],",
-    "  [{x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000}],",
-    "  [{x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500}]",
-    "];",
+    `const PATROLS = ${patrolStr};`,
     "",
     "while (true) {",
     "  const n = parseInt(readline()); if (!Number.isFinite(n)) break;",
@@ -272,7 +270,8 @@ function makeHybridBot(tw: TW, meta: string): string {
     const g: Genome = (raw.radarTurn !== undefined) ? raw
                    : raw.best ? raw.best
                    : { radarTurn: 16, stunRange: 1760, releaseDist: 1600 };
-    writeOut(makeGenomeBot(g, metaTag));
+    const patrols = PATROL_PATHS[patrolStyle] || PATROL_PATHS.a;
+    writeOut(makeGenomeBot(g, metaTag, patrols));
     return;
   }
 
