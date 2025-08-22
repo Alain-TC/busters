@@ -16,6 +16,10 @@ importers:
         version: 5.9.2
 
   packages/agents:
+    dependencies:
+      '@busters/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       esbuild:
         specifier: ^0.25.9
