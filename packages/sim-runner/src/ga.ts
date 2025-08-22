@@ -52,6 +52,8 @@ const DEFAULT_MODULE = '@busters/agents/greedy';
     random: '@busters/agents/random',
     camper: '@busters/agents/camper',
     stunner: '@busters/agents/stunner',
+    'base-camper': '@busters/agents/base-camper',
+    'aggressive-stunner': '@busters/agents/aggressive-stunner',
     defender: '@busters/agents/defender',
     scout: '@busters/agents/scout',
   };
