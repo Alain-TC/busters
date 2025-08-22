@@ -231,6 +231,27 @@ test('micro rollouts cache and stay under budget', () => {
   assert.ok(!microOverBudget());
 });
 
+test('two-turn contest cache evicts oldest after hitting cap', () => {
+  // avoid budget interference
+  microPerf.twoTurnMs = -1e6;
+  const enemy = { id: 2, x: 3000, y: 0 };
+  const base = {
+    enemy,
+    bustMin: BUST_MIN,
+    bustMax: BUST_MAX,
+    stunRange: STUN,
+    canStunMe: true,
+    canStunEnemy: false,
+  } as const;
+  for (let i = 0; i < 1000; i++) {
+    twoTurnContestDelta({ ...base, me: { id: 1, x: i, y: 0 } });
+  }
+  twoTurnContestDelta({ ...base, me: { id: 1, x: 1000, y: 0 } });
+  const before = microPerf.twoTurnMs;
+  twoTurnContestDelta({ ...base, me: { id: 1, x: 0, y: 0 } });
+  assert.ok(microPerf.twoTurnMs > before);
+});
+
 test('micro rollouts stop when over budget', () => {
   const me = { id: 1, x: 0, y: 0 };
   const enemy = { id: 2, x: 3000, y: 0 };

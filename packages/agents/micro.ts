@@ -25,14 +25,25 @@ export function resetMicroPerf() {
   twoTurnContestCache.clear();
   twoTurnInterceptCache.clear();
   twoTurnEjectCache.clear();
+  // still clears caches each tick; size cap just guards against misuse
 }
 export function microOverBudget() {
   return microPerf.twoTurnMs + microPerf.interceptMs + microPerf.ejectMs >= MICRO_BUDGET_MS;
 }
 
+const CACHE_CAP = 1_000;
+// resetMicroPerf() clears these caches each tick, but the cap guards against misuse
 const twoTurnContestCache = new Map<string, number>();
 const twoTurnInterceptCache = new Map<string, number>();
 const twoTurnEjectCache = new Map<string, number>();
+
+function setCache<K, V>(cache: Map<K, V>, key: K, value: V) {
+  cache.set(key, value);
+  if (cache.size > CACHE_CAP) {
+    const oldest = cache.keys().next().value as K | undefined;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+}
 
 function cacheKey(...nums: number[]): string {
   return nums.join('|');
@@ -169,7 +180,7 @@ export function twoTurnContestDelta(opts: {
     });
   }
   microPerf.twoTurnMs += performance.now() - t0;
-  twoTurnContestCache.set(key, delta);
+  setCache(twoTurnContestCache, key, delta);
   return delta;
 }
 
@@ -215,7 +226,7 @@ export function twoTurnInterceptDelta(opts: {
   let delta = interceptDelta({ me: me1, enemy: enemy1, myBase });
   delta += duelStunDelta({ me: me1, enemy: enemy1, canStunMe, canStunEnemy, stunRange });
   microPerf.interceptMs += performance.now() - t0;
-  twoTurnInterceptCache.set(key, delta);
+  setCache(twoTurnInterceptCache, key, delta);
   return delta;
 }
 
@@ -305,7 +316,7 @@ export function twoTurnEjectDelta(opts: {
   const r = dist(enemy1.x, enemy1.y, target.x, target.y);
   if (r <= stunRange && canStunEnemy) delta -= 0.5;
   microPerf.ejectMs += performance.now() - t0;
-  twoTurnEjectCache.set(key, delta);
+  setCache(twoTurnEjectCache, key, delta);
   return delta;
 }
 
