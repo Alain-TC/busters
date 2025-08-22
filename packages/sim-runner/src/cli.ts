@@ -4,7 +4,7 @@ import path from 'path';
 import { loadBotModule } from './loadBots';
 import { runEpisodes } from './runEpisodes';
 import { runRoundRobin } from './tournament';
-import { trainCEM as trainGA } from './ga';
+import { trainCEM } from './ga';
 
 // Hybrid subject (EVOL2)
 import {
@@ -455,7 +455,7 @@ async function main() {
     return;
   }
 
-  if (mode === 'ga') {
+  if (mode === 'cem') {
     const gens = Number(getFlag(rest, 'gens', 20));
     const pop = Number(getFlag(rest, 'pop', 24));
     const seed = Number(getFlag(rest, 'seed', 42));
@@ -468,7 +468,7 @@ async function main() {
     const rotateEvery = Number(getFlag(rest, 'rotate-opps', 0));
     const telemetry = String(getFlag(rest, 'telemetry', path.join('packages/sim-runner/artifacts', 'tag_telemetry.jsonl')));
     const oppPool = oppPoolArg.split(',').map((s) => ({ id: s.trim() })).filter(o => o.id);
-    await trainGA({
+    await trainCEM({
       gens, pop, elitePct: 0.2, seedsPer, episodesPerSeed, oppPool, hofSize, seed,
       artifactsDir: 'packages/sim-runner/artifacts', jobs,
       hofRefreshInterval: hofRefresh || undefined,
@@ -551,7 +551,7 @@ async function main() {
 
   console.log(`Usage:
   # Train Hybrid (CEM)
-  tsx src/cli.ts train --subject hybrid --algo cma --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,hof [--pfsp]
+  tsx src/cli.ts train --subject hybrid --algo cem --pop 24 --gens 12 --seeds-per 7 --seed 42 --opp-pool greedy,random,stunner,camper,hof [--pfsp]
 
   # Sim a single match (save replay with actions & tags)
   tsx src/cli.ts sim <botA> <botB> [--episodes 3] [--seed 42] [--replay path.json]
@@ -562,8 +562,8 @@ async function main() {
     [--replay-dir ../viewer/public/replays/tourney] \\
     [--out artifacts/tournament_standings.json]
 
-  # GA trainer with auto HOF refresh & opponent rotation
-  tsx src/cli.ts ga --gens 20 --pop 24 --opp-pool @busters/agents/greedy,@busters/agents/random \\
+  # CEM trainer with auto HOF refresh & opponent rotation
+  tsx src/cli.ts cem --gens 20 --pop 24 --opp-pool @busters/agents/greedy,@busters/agents/random \\
     [--hof-refresh 5] [--rotate-opps 5] [--telemetry artifacts/tag_telemetry.jsonl]
 `);
 }
