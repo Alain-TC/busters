@@ -116,8 +116,33 @@ test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
   const task: any = { type: 'SUPPORT', target: { x: 0, y: 0 }, payload: { allyIds: [2] }, baseScore: 0 };
   const enemies: any[] = [{ id: 3, x: 0, y: 0 }];
   const MY = { x: 0, y: 0 };
-  let s1 = __scoreAssign(b, task, enemies, MY, 0);
+  const st = new HybridState();
+  st.updateRoles([{ id: 1 } as any]);
+  let s1 = __scoreAssign(b, task, enemies, MY, 0, st);
   __mem.get(1)!.stunReadyAt = 5;
-  let s2 = __scoreAssign(b, task, enemies, MY, 0);
+  let s2 = __scoreAssign(b, task, enemies, MY, 0, st);
   assert.ok(s1 > s2);
+});
+
+test('carrying buster gets CARRY task and moves home', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 } };
+  const obs: any = { tick: 0, self: { id: 1, x: 3000, y: 3000, state: 1 }, friends: [], enemies: [], ghostsVisible: [] };
+  const action = act(ctx, obs) as any;
+  assert.equal(action.type, 'MOVE');
+  assert.equal(action.__dbg.tag, 'MOVE_CARRY');
+});
+
+test('carrying buster can switch to intercept task', () => {
+  __mem.clear();
+  const ctx: any = { myBase: { x: 0, y: 0 }, tick: 1 };
+  const obs: any = {
+    tick: 1,
+    self: { id: 1, x: 6000, y: 4500, state: 1 },
+    friends: [],
+    enemies: [{ id: 2, x: 7000, y: 6500, state: 1 }],
+    ghostsVisible: [],
+  };
+  const action = act(ctx, obs) as any;
+  assert.equal(action.__dbg.tag, 'MOVE_INT');
 });

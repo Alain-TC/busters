@@ -23,6 +23,8 @@ export type Weights = {
   BUST_ENEMY_NEAR_PEN: number;  // penalty per enemy near a ghost
   INTERCEPT_BASE: number;       // base utility for intercept tasks
   INTERCEPT_DIST_PEN: number;   // extra distance penalty for intercept
+  CARRY_BASE: number;           // base utility for carry tasks
+  CARRY_ENEMY_NEAR_PEN: number; // penalty per enemy near carrier
   DEFEND_BASE: number;          // base utility for defend tasks
   DEFEND_NEAR_BONUS: number;    // extra bonus if threat near base
   BLOCK_BASE: number;           // base utility for blocker tasks
@@ -52,6 +54,8 @@ export const WEIGHTS: Weights = {
   BUST_ENEMY_NEAR_PEN: 6,
   INTERCEPT_BASE: 16,
   INTERCEPT_DIST_PEN: 0.006268810020792386,
+  CARRY_BASE: 15,
+  CARRY_ENEMY_NEAR_PEN: 6,
   DEFEND_BASE: 10,
   DEFEND_NEAR_BONUS: 4,
   BLOCK_BASE: 5,

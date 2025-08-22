@@ -103,7 +103,14 @@ function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
 }
 
 /** ---- Auction / Task machinery ---- */
-type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT";
+type TaskType =
+  | "BUST"
+  | "INTERCEPT"
+  | "DEFEND"
+  | "BLOCK"
+  | "EXPLORE"
+  | "SUPPORT"
+  | "CARRY";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 
 /** Shared per-tick plan cache (computed once, read by all) */
@@ -189,6 +196,29 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
         baseScore: WEIGHTS.SUPPORT_BASE + alliesNear.length,
       });
     }
+  }
+
+  // CARRY home for allies already holding a ghost
+  for (const mate of team) {
+    const carrying = (mate as any).carrying !== undefined ? true : mate.state === 1;
+    if (!carrying) continue;
+    const riskCount = enemies.filter(e => dist(e.x, e.y, mate.x, mate.y) <= 2200).length;
+    const radius = 400;
+    const wps: Pt[] = [];
+    for (let i = 0; i < 6; i++) {
+      const ang = (Math.PI * 2 * i) / 6;
+      wps.push({
+        x: clamp(MY.x + Math.cos(ang) * radius, 0, W),
+        y: clamp(MY.y + Math.sin(ang) * radius, 0, H),
+      });
+    }
+    const baseScore = WEIGHTS.CARRY_BASE - riskCount * WEIGHTS.CARRY_ENEMY_NEAR_PEN;
+    tasks.push({
+      type: "CARRY",
+      target: { x: MY.x, y: MY.y },
+      payload: { id: mate.id, wps, risk: riskCount },
+      baseScore,
+    });
   }
 
   // BLOCK enemy base (if no carriers seen)
@@ -317,6 +347,21 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
     s += near * 1.5;
   }
 
+  if (t.type === "CARRY") {
+    if (b.id !== t.payload?.id) return -1e9;
+    for (const e of enemies) {
+      s += twoTurnContestDelta({
+        me: b,
+        enemy: e,
+        bustMin: BUST_MIN,
+        bustMax: BUST_MAX,
+        stunRange: TUNE.STUN_RANGE,
+        canStunMe,
+        canStunEnemy: e.state !== 2,
+      });
+    }
+  }
+
   // Role biases
   const role = state.roleOf(b.id);
   if (role === "SCOUT" && t.type === "EXPLORE") s += 5;
@@ -424,8 +469,6 @@ export function act(ctx: Ctx, obs: Obs) {
     if (dHome <= TUNE.RELEASE_DIST) {
       return dbg({ type: "RELEASE" }, "RELEASE", "at_base");
     }
-    const home = spacedTarget(me, MY, friends);
-    return dbg({ type: "MOVE", x: home.x, y: home.y }, "CARRY_HOME", "carrying");
   }
 
   // Stun priority: enemy carrier in range, else nearest in bust range
@@ -650,6 +693,66 @@ export function act(ctx: Ctx, obs: Obs) {
             reason: "support_bust",
           });
         }
+      }
+    }
+
+    if (myTask.type === "CARRY") {
+      const wps: Pt[] = myTask.payload?.wps ?? [];
+      if (!wps.length) wps.push(myTask.target);
+      let idx = 0;
+      for (const wp of wps) {
+        const P = spacedTarget(me, wp, friends);
+        const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
+        const deltas: number[] = [];
+        for (const e of enemiesAll) {
+          if (dist(e.x, e.y, P.x, P.y) <= 2500) {
+            deltas.push(
+              twoTurnContestDelta({
+                me,
+                enemy: e,
+                bustMin: BUST_MIN,
+                bustMax: BUST_MAX,
+                stunRange: TUNE.STUN_RANGE,
+                canStunMe: canStun,
+                canStunEnemy: e.state !== 2,
+              })
+            );
+          }
+        }
+        candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas, tag: "MOVE_CARRY", reason: `wp_${idx++}` });
+      }
+
+      const enemy = enemiesAll.find(e =>
+        (e.range ?? dist(me.x, me.y, e.x, e.y)) <= TUNE.STUN_RANGE && e.state !== 2
+      );
+      if (enemy && canStun) {
+        const delta = duelStunDelta({
+          me,
+          enemy,
+          canStunMe: true,
+          canStunEnemy: enemy.state !== 2,
+          stunRange: TUNE.STUN_RANGE,
+        });
+        candidates.push({ act: { type: "STUN", busterId: enemy.id }, base: 110, deltas: [delta], tag: "STUN", reason: "carry" });
+      }
+
+      const dHome = dist(me.x, me.y, MY.x, MY.y);
+      if (dHome <= TUNE.RELEASE_DIST) {
+        const deltas: number[] = [];
+        for (const e of enemiesAll) {
+          deltas.push(
+            twoTurnContestDelta({
+              me,
+              enemy: e,
+              bustMin: BUST_MIN,
+              bustMax: BUST_MAX,
+              stunRange: TUNE.STUN_RANGE,
+              canStunMe: canStun,
+              canStunEnemy: e.state !== 2,
+            })
+          );
+        }
+        candidates.push({ act: { type: "RELEASE" }, base: 200, deltas, tag: "RELEASE", reason: "carry" });
       }
     }
 
