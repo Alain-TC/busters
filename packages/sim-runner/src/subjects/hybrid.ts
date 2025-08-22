@@ -23,6 +23,11 @@ export const ORDER: readonly string[] = [
   ...WEIGHT_KEYS.map(k => `WEIGHTS.${k}`),
 ];
 
+const ORDER_IDX = ORDER.reduce<Record<string, number>>((acc, key, idx) => {
+  acc[key] = idx;
+  return acc;
+}, {});
+
 type Pt = { x: number; y: number };
 type Ent = { id: number; x: number; y: number; range?: number; state?: number; value?: number };
 
@@ -58,8 +63,8 @@ export function baselineVec(): number[] {
 /** Clamp & coerce vector -> {TUNE, WEIGHTS} */
 export function twFromVec(vec: number[]): TW {
   const pick = (key: string, def: number) => {
-    const idx = ORDER.indexOf(key);
-    return idx >= 0 && Number.isFinite(vec[idx]) ? vec[idx] : def;
+    const idx = ORDER_IDX[key];
+    return idx !== undefined && Number.isFinite(vec[idx]) ? vec[idx] : def;
   };
   const TUNE = {
     RELEASE_DIST: Math.round(clamp(pick("TUNE.RELEASE_DIST", BASE_TUNE.RELEASE_DIST), 1200, 2000)),
