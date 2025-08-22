@@ -23,9 +23,19 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+let hasSpare = false;
+let spare = 0;
+
 export function gaussian(rng: () => number): number {
+  if (hasSpare) {
+    hasSpare = false;
+    return spare;
+  }
   let u = 0, v = 0;
   while (u === 0) u = rng();
   while (v === 0) v = rng();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  const mag = Math.sqrt(-2.0 * Math.log(u));
+  spare = mag * Math.sin(2.0 * Math.PI * v);
+  hasSpare = true;
+  return mag * Math.cos(2.0 * Math.PI * v);
 }
