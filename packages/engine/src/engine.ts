@@ -281,7 +281,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   }
 
   // Fast index by team
-  const byTeam: Record<TeamId, BusterPublicState[]> = { 0: [], 1: [] } as any;
+  const byTeam: Record<TeamId, BusterPublicState[]> = { 0: [], 1: [] };
   next.busters.forEach(b => byTeam[b.teamId].push(b));
 
   // 1) Collect intents
@@ -333,8 +333,22 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
   }
 
   // 6) BUST accumulation & capture decision
-  const bustingByGhost = new Map<number, { byTeam: Record<TeamId, number>; closest: Record<TeamId, { b: BusterPublicState; d2: number } | null> }>();
-  for (const g of next.ghosts) bustingByGhost.set(g.id, { byTeam: { 0: 0, 1: 0 } as any, closest: { 0: null, 1: null } });
+  const bustingByGhost = new Map<number, {
+    byTeam: Record<TeamId, number>;
+    closest: Record<TeamId, { b: BusterPublicState; d2: number } | null>;
+  }>();
+  for (const g of next.ghosts) {
+    bustingByGhost.set(
+      g.id,
+      {
+        byTeam: { 0: 0, 1: 0 },
+        closest: { 0: null, 1: null },
+      } satisfies {
+        byTeam: Record<TeamId, number>;
+        closest: Record<TeamId, { b: BusterPublicState; d2: number } | null>;
+      },
+    );
+  }
 
   for (const b of next.busters) {
     if (b.state === 2) continue;
@@ -352,7 +366,7 @@ export function step(state: GameState, actions: ActionsByTeam): GameState {
         g.engagedBy += 1;
         // state flag (optional)
         b.state = b.state === 2 ? 2 : 3;
-        b.value = g.id as any;
+        b.value = g.id;
       }
     }
   }
