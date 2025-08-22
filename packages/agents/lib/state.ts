@@ -292,11 +292,15 @@ export function predictEnemyPath(e: EnemySeen, base: Pt, ticks: number): Pt[] {
       const d = Math.hypot(dx, dy) || 1;
       v = { x: (dx / d) * RULES.MOVE_SPEED, y: (dy / d) * RULES.MOVE_SPEED };
     }
-    cur = { x: cur.x + v.x, y: cur.y + v.y };
+    cur = {
+      x: clamp(cur.x + v.x, 0, MAP_W),
+      y: clamp(cur.y + v.y, 0, MAP_H)
+    };
     path.push({ x: Math.round(cur.x), y: Math.round(cur.y) });
     const bx = base.x - cur.x, by = base.y - cur.y;
     if (Math.hypot(bx, by) <= RULES.MOVE_SPEED) break;
-    if (v.x * bx + v.y * by <= 0) v = undefined;
+    const d = Math.hypot(bx, by) || 1;
+    v = { x: (bx / d) * RULES.MOVE_SPEED, y: (by / d) * RULES.MOVE_SPEED };
   }
   return path;
 }
