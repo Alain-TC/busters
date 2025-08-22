@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta } from './micro';
+import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta } from './micro';
 
 // Verify contested bust uses projected positions
 const STUN = 1760;
@@ -103,5 +103,14 @@ test('release block projects carrier path', () => {
   const carrier = { id: 2, x: 2600, y: 0 };
   const myBase = { x: 0, y: 0 };
   const delta = releaseBlockDelta({ blocker, carrier, myBase, stunRange: STUN });
+  assert.ok(delta > 0);
+});
+
+test('ejectDelta favors progress and ally handoff', () => {
+  const me = { id: 1, x: 4000, y: 4000 };
+  const target = { x: 3500, y: 3500 };
+  const myBase = { x: 0, y: 0 };
+  const ally = { id: 2, x: 3300, y: 3300 };
+  const delta = ejectDelta({ me, target, myBase, ally });
   assert.ok(delta > 0);
 });

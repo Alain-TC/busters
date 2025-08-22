@@ -144,6 +144,25 @@ export function releaseBlockDelta(opts: {
   return delta;
 }
 
+/**
+ * Heuristic value for ejecting a carried ghost toward some point.
+ * Rewards progress toward base and slight bonus if an ally is nearer
+ * to the landing spot than the ejecting buster (handoff).
+ */
+export function ejectDelta(opts: { me: Ent; target: Pt; myBase: Pt; ally?: Ent }) {
+  const { me, target, myBase, ally } = opts;
+  const before = dist(me.x, me.y, myBase.x, myBase.y);
+  const after = dist(target.x, target.y, myBase.x, myBase.y);
+  // progress toward base scaled to small heuristic range
+  let delta = (before - after) * 0.001;
+  if (ally) {
+    const meTo = dist(me.x, me.y, target.x, target.y);
+    const allyTo = dist(ally.x, ally.y, target.x, target.y);
+    if (allyTo < meTo) delta += 0.25;
+  }
+  return delta;
+}
+
 /** Simple additive scoring helper for candidate actions. */
 export type CandidateScore = { base: number; deltas?: number[] };
 export function scoreCandidate(c: CandidateScore): number {
