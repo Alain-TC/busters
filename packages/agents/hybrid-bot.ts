@@ -35,6 +35,7 @@ const WEIGHTS = WEIGHTS_IN as any;
 
 /** --- Small utils (no imports) --- */
 const W = 16000, H = 9000;
+const BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
 const BUST_MIN = 900, BUST_MAX = 1760;
 const STUN_CD = 20;
 const EJECT_MAX = 1760;
@@ -469,10 +470,10 @@ export function act(ctx: Ctx, obs: Obs) {
 
   /* ---------- High-priority instant actions ---------- */
 
-  // Release if at base
+  // Carrying but not yet inside scoring radius
   if (carrying) {
     const dHome = dist(me.x, me.y, MY.x, MY.y);
-    if (dHome > TUNE.RELEASE_DIST) {
+    if (dHome >= Math.min(TUNE.RELEASE_DIST, BASE_SCORE_RADIUS)) {
       const threat = enemies.find(e => (e.stunnedFor ?? 0) <= 0 && dist(e.x, e.y, me.x, me.y) <= TUNE.STUN_RANGE);
       let handoff: Ent | undefined;
       for (const f of friends) {
@@ -583,7 +584,7 @@ export function act(ctx: Ctx, obs: Obs) {
 
     if (myTask.type === "CARRY") {
       const dHome = dist(me.x, me.y, MY.x, MY.y);
-      if (dHome <= TUNE.RELEASE_DIST) {
+      if (dHome < Math.min(TUNE.RELEASE_DIST, BASE_SCORE_RADIUS)) {
         candidates.push({ act: { type: "RELEASE" }, base: 120, deltas: [], tag: "RELEASE", reason: "carry" });
       }
       const center = myTask.target;

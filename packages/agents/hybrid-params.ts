@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 
 export type Tune = {
-  RELEASE_DIST: number;       // distance to base to RELEASE
+  RELEASE_DIST: number;       // release when dHome < min(RELEASE_DIST, BASE_SCORE_RADIUS)
   STUN_RANGE: number;         // max range to STUN
   RADAR1_TURN: number;        // first scheduled RADAR (buster localIdx 0)
   RADAR2_TURN: number;        // second scheduled RADAR (buster localIdx 1)

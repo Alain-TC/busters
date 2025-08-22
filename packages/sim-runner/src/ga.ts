@@ -98,6 +98,7 @@ function vecStd(vs: number[][], m: number[]) {
 
 // ===== HOF =====
 const HOF: Genome[] = [];
+const BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
 
 // ===== Bot from genome =====
 function genomeToBot(genome: Genome) {
@@ -106,7 +107,7 @@ function genomeToBot(genome: Genome) {
     act(ctx: any, obs: any) {
       if (obs.self.carrying !== undefined) {
         const dHome = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
-        if (dHome <= genome.releaseDist) return { type: 'RELEASE' };
+        if (dHome < Math.min(genome.releaseDist, BASE_SCORE_RADIUS)) return { type: 'RELEASE' };
         return { type: 'MOVE', x: ctx.myBase.x, y: ctx.myBase.y };
       }
       const enemy = obs.enemies?.[0];
@@ -581,7 +582,7 @@ export function compileGenomeToJS(inPath: string, outPath: string) {
     "export function act(ctx, obs) {",
     "  if (obs.self.carrying !== undefined) {",
     "    const d = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);",
-    `    if (d <= ${g.releaseDist}) return { type: "RELEASE" };`,
+    `    if (d < Math.min(${g.releaseDist}, 1600)) return { type: "RELEASE" };`,
     "    return { type: \"MOVE\", x: ctx.myBase.x, y: ctx.myBase.y };",
     "  }",
     `  const enemy = obs.enemies?.[0];`,

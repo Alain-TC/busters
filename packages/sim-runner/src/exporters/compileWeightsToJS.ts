@@ -6,6 +6,7 @@ export function compileWeightsToSingleFile(bestVec: number[], jsOutPath: string)
   const src = `/** Auto-generated hybrid CG bot (EVOL2) */
 export const meta = { name: "HybridEvol2", version: "ga" };
 const W = ${JSON.stringify(w)};
+const BASE_SCORE_RADIUS = 1600;
 function D(ax,ay,bx,by){return Math.hypot(ax-bx,ay-by)}
 function R(self, ghost){
   const dx=ghost.x-self.x, dy=ghost.y-self.y;
@@ -18,7 +19,7 @@ export function act(ctx, obs){
   const me=obs.self;
   if (me.carrying !== undefined){
     const d=D(me.x,me.y,ctx.myBase.x,ctx.myBase.y);
-    if (d <= W.releaseDist) return { type:"RELEASE" };
+    if (d < Math.min(W.releaseDist, BASE_SCORE_RADIUS)) return { type:"RELEASE" };
     return { type:"MOVE", x: ctx.myBase.x, y: ctx.myBase.y };
   }
   const e0 = (obs.enemies&&obs.enemies.find(e=> e.carrying !== undefined)) || (obs.enemies && obs.enemies[0]);

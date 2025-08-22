@@ -36,6 +36,7 @@ var __defProp = Object.defineProperty;
   // fog.ts
   var W = 16e3;
   var H = 9e3;
+  var BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
   var CELL = 400;
   var GX = Math.ceil(W / CELL);
   var GY = Math.ceil(H / CELL);
@@ -905,7 +906,8 @@ var __defProp = Object.defineProperty;
     const canStun = !stunned && stunCdLeft <= 0;
     if (carrying) {
       const dHome = dist3(me.x, me.y, MY.x, MY.y);
-      if (dHome <= TUNE2.RELEASE_DIST) {
+      if (dHome < Math.min(TUNE2.RELEASE_DIST, BASE_SCORE_RADIUS)) {
+        // release only when strictly inside base radius
         return dbg({ type: "RELEASE" }, "RELEASE", "at_base");
       }
       const home = spacedTarget(me, MY, friends);

@@ -90,10 +90,10 @@ while (true) {
       continue;
     }
 
-    // Carrying → go home & release when close enough (<= BASE_SCORE_RADIUS guarantees scoring)
+    // Carrying → go home & release when strictly inside base (< BASE_SCORE_RADIUS)
     if (me.state === 1) {
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
-      if (dHome <= Math.min(G.releaseDist, BASE_SCORE_RADIUS)) {
+      if (dHome < Math.min(G.releaseDist, BASE_SCORE_RADIUS)) {
         out.push('RELEASE carry→score');
       } else {
         out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);

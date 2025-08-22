@@ -7,6 +7,7 @@ type Genome = { radarTurn:number; stunRange:number; releaseDist:number };
 
 // Safe defaults if a task comes without a genome (shouldn't happen, but avoid crashes)
 const DEFAULT_GENOME: Genome = { radarTurn: 23, stunRange: 1766, releaseDist: 1600 };
+const BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
 
 function coerceGenome(g: any): Genome {
   if (!g || typeof g !== "object") return DEFAULT_GENOME;
@@ -18,7 +19,7 @@ function coerceGenome(g: any): Genome {
   return r as Genome;
 }
 
-function genomeToBot(genome: Genome) {
+export function genomeToBot(genome: Genome) {
   const g = coerceGenome(genome); // close over a validated genome
   return {
     meta: { name: "EvolvedBot", version: "ga" },
@@ -26,7 +27,7 @@ function genomeToBot(genome: Genome) {
       // Carrying → go home & RELEASE near base
       if (obs.self.carrying !== undefined) {
         const dHome = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
-        if (dHome <= g.releaseDist) return { type: "RELEASE" };
+        if (dHome < Math.min(g.releaseDist, BASE_SCORE_RADIUS)) return { type: "RELEASE" };
         return { type: "MOVE", x: ctx.myBase.x, y: ctx.myBase.y };
       }
       // Opportunistic STUN
@@ -72,33 +73,35 @@ async function resolveOpponent(spec: OppSpec) {
   }
 }
 
-parentPort!.on("message", async (msg: TaskMsg) => {
-  try {
-    const meBot = genomeToBot(coerceGenome(msg.genome));
-    const oppBot = await resolveOpponent(msg.opponent);
+if (parentPort) {
+  parentPort.on("message", async (msg: TaskMsg) => {
+    try {
+      const meBot = genomeToBot(coerceGenome(msg.genome));
+      const oppBot = await resolveOpponent(msg.opponent);
 
-    const botA = msg.role === "A" ? meBot : oppBot;
-    const botB = msg.role === "A" ? oppBot : meBot;
+      const botA = msg.role === "A" ? meBot : oppBot;
+      const botB = msg.role === "A" ? oppBot : meBot;
 
-    const res = await runEpisodes({
-      seed: msg.seed,
-      episodes: msg.episodes,
-      bustersPerPlayer: msg.bpp,
-      ghostCount: msg.ghosts,
-      botA,
-      botB,
-    });
+      const res = await runEpisodes({
+        seed: msg.seed,
+        episodes: msg.episodes,
+        bustersPerPlayer: msg.bpp,
+        ghostCount: msg.ghosts,
+        botA,
+        botB,
+      });
 
-    parentPort!.postMessage({
-      ok: true,
-      id: msg.id,
-      diff: res.scoreA - res.scoreB,
-    });
-  } catch (e: any) {
-    parentPort!.postMessage({
-      ok: false,
-      id: (msg as any)?.id ?? -1,
-      error: (e && e.stack) ? e.stack : String(e),
-    });
-  }
-});
+      parentPort.postMessage({
+        ok: true,
+        id: msg.id,
+        diff: res.scoreA - res.scoreB,
+      });
+    } catch (e: any) {
+      parentPort.postMessage({
+        ok: false,
+        id: (msg as any)?.id ?? -1,
+        error: (e && e.stack) ? e.stack : String(e),
+      });
+    }
+  });
+}
