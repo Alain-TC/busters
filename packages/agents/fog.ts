@@ -2,6 +2,7 @@
  *  - Grid covers 16000x9000 with 400px cells => 40 x 23
  *  - Tracks last-visited tick per cell
  *  - Tracks a soft "ghost belief" heat value per cell (decays each tick)
+ *  - Tracks probability corridors for unseen enemy carriers
  *  - Provides pickFrontierTarget(start) = best exploration target
  *
  *  API:
@@ -29,17 +30,30 @@ export class Fog {
   private last: Int32Array;
   // belief heat (0..+inf, small decay)
   private heat: Float32Array;
+  // corridor probability for unseen carriers
+  private corridor: Float32Array;
 
-  constructor() {
+  private ghostDecay: number;
+  private corridorDecay: number;
+  private spawns: Pt[];
+
+  constructor(spawnPoints: Pt[] = [], ghostDecay = 0.97, corridorDecay = 0.9) {
     this.last = new Int32Array(GX * GY);
     this.heat = new Float32Array(GX * GY);
+    this.corridor = new Float32Array(GX * GY);
+    this.ghostDecay = ghostDecay;
+    this.corridorDecay = corridorDecay;
+    this.spawns = spawnPoints.slice();
     for (let i = 0; i < this.last.length; i++) this.last[i] = -1;
+    this.seedSpawns();
   }
 
   reset() {
     this.tick = 0;
     this.last.fill(-1);
     this.heat.fill(0);
+    this.corridor.fill(0);
+    this.seedSpawns();
   }
 
   beginTick(t: number) {
@@ -47,10 +61,11 @@ export class Fog {
     this.tick = t;
 
     // light decay of heat to slowly forget stale beliefs
-    // (fast: vectorized loop)
     for (let i = 0; i < this.heat.length; i++) {
-      this.heat[i] *= 0.97; // gentle decay
+      this.heat[i] *= this.ghostDecay;
       if (this.heat[i] < 0.02) this.heat[i] = 0;
+      this.corridor[i] *= this.corridorDecay;
+      if (this.corridor[i] < 0.02) this.corridor[i] = 0;
     }
     this.diffuse();
     this.normalize();
@@ -66,7 +81,9 @@ export class Fog {
     const i = this.idxOf(p.x, p.y);
     this.last[i] = this.tick;
     this.heat[i] *= 0.5;
+    this.corridor[i] *= 0.5;
     this.normalize();
+    this.normalizeCorridor();
   }
 
  /** Clear vision circle (approx) by setting heat low & refresh visited in the disk */
@@ -85,10 +102,12 @@ export class Fog {
           const i = gy * GX + gx;
           this.last[i] = this.tick;
           this.heat[i] *= 0.2; // strong down-weight if we just saw it
+          this.corridor[i] *= 0.2;
         }
       }
     }
     this.normalize();
+    this.normalizeCorridor();
   }
 
   /** Probability/heat at a given point */
@@ -115,6 +134,15 @@ export class Fog {
       }
     }
     this.normalize();
+  }
+
+  /** Track corridor probability along a path of points (unseen carrier) */
+  bumpCorridor(path: Pt[]) {
+    for (const p of path) {
+      const i = this.idxOf(p.x, p.y);
+      this.corridor[i] += 1;
+    }
+    this.normalizeCorridor();
   }
 
   private diffuse() {
@@ -149,6 +177,23 @@ export class Fog {
     for (const v of this.heat) sum += v;
     if (sum <= 0) return;
     for (let i = 0; i < this.heat.length; i++) this.heat[i] /= sum;
+  }
+
+  private normalizeCorridor() {
+    let sum = 0;
+    for (const v of this.corridor) sum += v;
+    if (sum <= 0) return;
+    for (let i = 0; i < this.corridor.length; i++) this.corridor[i] /= sum;
+  }
+
+  /** Seed initial ghost belief at spawn points */
+  private seedSpawns() {
+    if (!this.spawns.length) return;
+    for (const s of this.spawns) {
+      const i = this.idxOf(s.x, s.y);
+      this.heat[i] += 1;
+    }
+    this.normalize();
   }
 
   /** Frontier score and target based on age * distance * heat */

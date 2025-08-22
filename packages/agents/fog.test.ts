@@ -2,6 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Fog } from './fog';
 
+test('constructor seeds heat at spawn points', () => {
+  const f = new Fog([{ x: 0, y: 0 }]);
+  const idx = (f as any).idxOf(0, 0);
+  const h = (f as any).heat[idx];
+  assert.ok(h > 0);
+});
+
 test('bumpGhost raises heat and beginTick decays it', () => {
   const f = new Fog();
   f.bumpGhost(8000, 4500);
@@ -52,4 +59,20 @@ test('pickFrontierTarget favors hot unvisited cells', () => {
   const target = f.pickFrontierTarget({ x: 0, y: 0 });
   assert.ok(Math.abs(target.x - 8200) < 400);
   assert.ok(Math.abs(target.y - 4600) < 400);
+});
+
+test('bumpCorridor increases corridor probability and decays', () => {
+  const f = new Fog();
+  const path = [
+    { x: 0, y: 0 },
+    { x: 8000, y: 4500 },
+    { x: 16000, y: 9000 }
+  ];
+  f.bumpCorridor(path);
+  const idx = (f as any).idxOf(8000, 4500);
+  const c0 = (f as any).corridor[idx];
+  assert.ok(c0 > 0);
+  f.beginTick(1);
+  const c1 = (f as any).corridor[idx];
+  assert.ok(c1 < c0);
 });

@@ -41,6 +41,10 @@ export class HybridState {
   readonly ghostProb: number[];
   ghostDecay: number;
 
+  // corridor probability for unseen carriers
+  readonly corridorProb: number[];
+  corridorDecay: number;
+
   // Enemy last-seen
   enemies = new Map<number, EnemySeen>();
   enemyMaxAge: number;
@@ -54,7 +58,8 @@ export class HybridState {
     rows = 5,
     enemyMaxAge = DEFAULT_ENEMY_MAX_AGE,
     spawnPoints: Pt[] = [],
-    ghostDecay = 0.95
+    ghostDecay = 0.95,
+    corridorDecay = 0.9
   ) {
     const W = bounds?.w ?? MAP_W;
     const H = bounds?.h ?? MAP_H;
@@ -66,7 +71,9 @@ export class HybridState {
     this.visits = Array(size).fill(0);
     this.enemyMaxAge = enemyMaxAge;
     this.ghostProb = Array(size).fill(0);
+    this.corridorProb = Array(size).fill(0);
     this.ghostDecay = ghostDecay;
+    this.corridorDecay = corridorDecay;
     this.seedGhosts(spawnPoints);
   }
 
@@ -86,6 +93,7 @@ export class HybridState {
       const i = this.idxFromPoint(s);
       this.ghostProb[i] = 1;
     }
+    this.normalizeGhosts();
   }
 
   /** Apply exponential decay to all ghost probabilities */
@@ -94,6 +102,13 @@ export class HybridState {
       this.ghostProb[i] *= this.ghostDecay;
     }
     this.normalizeGhosts();
+  }
+
+  /** Decay corridor probabilities for unseen carriers */
+  decayCorridors() {
+    for (let i = 0; i < this.corridorProb.length; i++) {
+      this.corridorProb[i] *= this.corridorDecay;
+    }
   }
 
   /** Update probabilities with observed or captured ghosts */
@@ -107,6 +122,19 @@ export class HybridState {
       this.ghostProb[i] = 0;
     }
     this.normalizeGhosts();
+  }
+
+  /** Increase corridor probabilities based on unseen carrier paths */
+  updateCorridors(base: Pt) {
+    for (const e of this.enemies.values()) {
+      if (!e.carrying) continue;
+      const path = predictEnemyPath(e, base, 10);
+      for (const p of path) {
+        const i = this.idxFromPoint(p);
+        this.corridorProb[i] += 1;
+      }
+    }
+    this.normalizeCorridors();
   }
 
   /** Diffuse probabilities to neighboring cells */
@@ -167,6 +195,13 @@ export class HybridState {
     for (let i = 0; i < this.ghostProb.length; i++) this.ghostProb[i] /= sum;
   }
 
+  normalizeCorridors() {
+    let sum = 0;
+    for (const v of this.corridorProb) sum += v;
+    if (sum <= 0) return;
+    for (let i = 0; i < this.corridorProb.length; i++) this.corridorProb[i] /= sum;
+  }
+
   /** Center points of top-N cells by probability (descending) */
   topGhostCells(n = 1): Array<{ center: Pt; prob: number }> {
     const cells = this.ghostProb
@@ -184,6 +219,10 @@ export class HybridState {
   /** Probability lookup for a point */
   ghostProbAt(p: Pt): number {
     return this.ghostProb[this.idxFromPoint(p)];
+  }
+
+  corridorProbAt(p: Pt): number {
+    return this.corridorProb[this.idxFromPoint(p)];
   }
 
   /** Return center of least-visited cell (simple frontier heuristic) */
