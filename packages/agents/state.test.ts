@@ -80,6 +80,32 @@ test('updateCorridors tracks unseen carrier path and decays', () => {
   assert.ok(after < before);
 });
 
+test('bestFrontier combines visits with ghost and corridor probabilities', () => {
+  const st = new HybridState({ w: 16000, h: 9000 }, 2, 1);
+
+  // More visited cell should still be chosen if ghost weight is high enough
+  st.visits[0] = 2;
+  st.visits[1] = 0;
+  st.ghostProb[0] = 1;
+  st.ghostProb[1] = 0;
+  st.normalizeGhosts();
+  st.normalizeCorridors();
+  let p = st.bestFrontier(2, 0); // emphasize ghost probability
+  assert.deepEqual(p, { x: 4000, y: 4500 });
+
+  // Corridor probability influences selection when visits are equal
+  st.visits[0] = 0;
+  st.visits[1] = 0;
+  st.ghostProb[0] = 0;
+  st.ghostProb[1] = 0;
+  st.corridorProb[0] = 0;
+  st.corridorProb[1] = 1;
+  st.normalizeGhosts();
+  st.normalizeCorridors();
+  p = st.bestFrontier();
+  assert.deepEqual(p, { x: 12000, y: 4500 });
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
 const botFile = path.join(root, 'codingame_bot.js');

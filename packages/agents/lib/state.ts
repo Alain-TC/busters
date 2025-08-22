@@ -226,11 +226,23 @@ export class HybridState {
     return this.corridorProb[this.idxFromPoint(p)];
   }
 
-  /** Return center of least-visited cell (simple frontier heuristic) */
-  bestFrontier(): Pt {
-    let bestI = 0, bestV = this.visits[0];
-    for (let i = 1; i < this.visits.length; i++) {
-      if (this.visits[i] < bestV) { bestV = this.visits[i]; bestI = i; }
+  /**
+   * Return center of cell with lowest weighted score combining visit
+   * count, ghost probability and corridor probability.
+   *
+   * score = normalizedVisits - α * ghostProb - β * corridorProb
+   *
+   * Lower scores are preferred to favor less visited, high-probability
+   * regions.
+   */
+  bestFrontier(alpha = 1, beta = 1): Pt {
+    const maxVisit = Math.max(...this.visits);
+    let bestI = 0;
+    let bestScore = Infinity;
+    for (let i = 0; i < this.visits.length; i++) {
+      const visitScore = maxVisit > 0 ? this.visits[i] / maxVisit : 0;
+      const score = visitScore - alpha * this.ghostProb[i] - beta * this.corridorProb[i];
+      if (score < bestScore) { bestScore = score; bestI = i; }
     }
     const cy = Math.floor(bestI / this.cols);
     const cx = bestI % this.cols;
