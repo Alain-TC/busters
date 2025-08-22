@@ -22,7 +22,21 @@ import {
 } from "./micro";
 import { hungarian } from "./hungarian";
 // Import basic vector helpers directly to avoid workspace package resolution issues
-import { clamp, dist, norm } from "../shared/src/vec.ts";
+import {
+  W,
+  H,
+  BUST_MIN,
+  BUST_MAX,
+  STUN_CD,
+  PATROLS,
+  resolveBases,
+  spacedTarget,
+  blockerRing,
+  uniqTeam,
+  clamp,
+  dist,
+  norm,
+} from "./hybrid/utils";
 
 const micro = (fn: () => number) => (microOverBudget() ? 0 : fn());
 
@@ -38,11 +52,8 @@ export function setHybridParams(params: { TUNE: Partial<Tune>; WEIGHTS: Partial<
   Object.assign(WEIGHTS, params.WEIGHTS);
 }
 
-/** --- Small utils (no imports) --- */
-const W = 16000, H = 9000;
+/** --- Small constants --- */
 const BASE_SCORE_RADIUS = 1600; // must be strictly inside to score
-const BUST_MIN = 900, BUST_MAX = 1760;
-const STUN_CD = 20;
 export const EJECT_RADIUS = 1760;
 export const ENEMY_NEAR_RADIUS = 2200;
 export const STUN_CHECK_RADIUS = 2500;
@@ -79,46 +90,6 @@ export const __mem = mem; // exposed for tests
 function M(id: number) { if (!mem.has(id)) mem.set(id, { stunReadyAt: 0, radarUsed: false }); return mem.get(id)!; }
 let lastTick = Infinity;
 
-/** Patrol paths used as exploration frontiers (simple & fast) */
-const PATROLS: Pt[][] = [
-  [ {x:2500,y:2500},{x:12000,y:2000},{x:15000,y:8000},{x:2000,y:8000},{x:8000,y:4500} ],
-  [ {x:13500,y:6500},{x:8000,y:1200},{x:1200,y:1200},{x:8000,y:7800},{x:8000,y:4500} ],
-  [ {x:8000,y:4500},{x:14000,y:4500},{x:8000,y:8000},{x:1000,y:4500},{x:8000,y:1000} ],
-  [ {x:2000,y:7000},{x:14000,y:7000},{x:14000,y:2000},{x:2000,y:2000},{x:8000,y:4500} ]
-];
-
-/** Resolve bases robustly (mirror enemy if missing) */
-function resolveBases(ctx: Ctx): { my: Pt; enemy: Pt } {
-  const my = ctx.myBase ?? { x: 0, y: 0 };
-  const enemy = ctx.enemyBase ?? { x: W - my.x, y: H - my.y };
-  return { my, enemy };
-}
-
-/** Anti-collision: nudge target away from nearest friend */
-function spacedTarget(me: Ent, raw: Pt, friends?: Ent[]): Pt {
-  if (!friends || friends.length <= 1) {
-    const phase = ((me.id * 9301) ^ 0x9e37) & 1 ? 1 : -1;
-    const [dx, dy] = norm(raw.x - me.x, raw.y - me.y);
-    const px = -dy, py = dx;
-    return { x: clamp(raw.x + phase * 220 * px, 0, W), y: clamp(raw.y + phase * 220 * py, 0, H) };
-  }
-  let nearest: Ent | undefined, best = Infinity;
-  for (const f of friends) {
-    if (f.id === me.id) continue;
-    const d = dist(me.x, me.y, f.x, f.y);
-    if (d < best) { best = d; nearest = f; }
-  }
-  if (!nearest || best >= TUNE.SPACING) return raw;
-  const [ax, ay] = norm(me.x - nearest.x, me.y - nearest.y);
-  return { x: clamp(raw.x + ax * TUNE.SPACING_PUSH, 0, W), y: clamp(raw.y + ay * TUNE.SPACING_PUSH, 0, H) };
-}
-
-/** Base-block ring point (outside enemy base, facing from ours) */
-function blockerRing(myBase: Pt, enemyBase: Pt): Pt {
-  const [vx, vy] = norm(enemyBase.x - myBase.x, enemyBase.y - myBase.y);
-  return { x: clamp(enemyBase.x - vx * TUNE.BLOCK_RING, 0, W), y: clamp(enemyBase.y - vy * TUNE.BLOCK_RING, 0, H) };
-}
-
 /** ---- Auction / Task machinery ---- */
 type TaskType = "BUST" | "INTERCEPT" | "DEFEND" | "BLOCK" | "EXPLORE" | "SUPPORT" | "CARRY";
 type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
@@ -126,13 +97,6 @@ type Task = { type: TaskType; target: Pt; payload?: any; baseScore: number };
 /** Shared per-tick plan cache (computed once, read by all) */
 let planTick = -1;
 let planAssign = new Map<number, Task>(); // busterId -> task
-
-function uniqTeam(self: Ent, friends?: Ent[]): Ent[] {
-  const map = new Map<number, Ent>();
-  map.set(self.id, self);
-  (friends ?? []).forEach(f => map.set(f.id, f));
-  return Array.from(map.values());
-}
 
 function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): Task[] {
   const tasks: Task[] = [];
@@ -223,7 +187,7 @@ function buildTasks(ctx: Ctx, meObs: Obs, state: HybridState, MY: Pt, EN: Pt): T
 
   // BLOCK enemy base (if no carriers seen)
   if (!enemies.some(e => e.state === 1) && !Array.from(state.enemies.values()).some(e => e.carrying)) {
-    tasks.push({ type: "BLOCK", target: blockerRing(MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
+    tasks.push({ type: "BLOCK", target: blockerRing(TUNE, MY, EN), baseScore: WEIGHTS.BLOCK_BASE });
   }
 
   // EXPLORE: coarse frontier via shared state (fallback to patrols)
@@ -628,7 +592,7 @@ export function executePlan(args: ExecuteArgs) {
         const ang = (Math.PI * 2 * i) / 6;
         const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
         const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
         const close = enemiesAll.filter(e => dist(e.x, e.y, P.x, P.y) <= STUN_CHECK_RADIUS);
         const deltas: number[] = [];
@@ -693,7 +657,7 @@ export function executePlan(args: ExecuteArgs) {
           const ang = (Math.PI * 2 * i) / 6;
           const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
           const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-          const P = spacedTarget(me, { x: px, y: py }, friends);
+          const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
           const sim = { id: me.id, x: P.x, y: P.y } as Ent;
           let extra = 0;
           for (const e of enemiesAll) {
@@ -724,7 +688,7 @@ export function executePlan(args: ExecuteArgs) {
         const ang = (Math.PI * 2 * i) / 6;
         const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
         const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
         const deltas: number[] = [];
         if (enemy) {
@@ -781,7 +745,7 @@ export function executePlan(args: ExecuteArgs) {
         const ang = (Math.PI * 2 * i) / 6;
         const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
         const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: "MOVE_SUP", reason: `a${i}` });
       }
@@ -832,7 +796,7 @@ export function executePlan(args: ExecuteArgs) {
         const ang = (Math.PI * 2 * i) / 6;
         const px = clamp(center.x + Math.cos(ang) * radius, 0, W);
         const py = clamp(center.y + Math.sin(ang) * radius, 0, H);
-        const P = spacedTarget(me, { x: px, y: py }, friends);
+        const P = spacedTarget(TUNE, me, { x: px, y: py }, friends);
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: `MOVE_${myTask.type}`, reason: `a${i}` });
       }
@@ -870,7 +834,7 @@ export function executePlan(args: ExecuteArgs) {
         const cur = path[Mx.wp % path.length];
         if (dist(me.x, me.y, cur.x, cur.y) < 800) Mx.wp = (Mx.wp + 1) % path.length;
         const next = path[Mx.wp % path.length];
-        const P = spacedTarget(me, next, friends);
+        const P = spacedTarget(TUNE, me, next, friends);
         const base = 100 - dist(me.x, me.y, P.x, P.y) * 0.01;
         candidates.push({ act: { type: "MOVE", x: P.x, y: P.y }, base, deltas: [], tag: "EXPLORE_WP", reason: `wp_${Mx.wp}` });
       }
@@ -886,11 +850,11 @@ export function executePlan(args: ExecuteArgs) {
 
   if (ghosts.length) {
     const g = ghosts[0];
-    const chase = spacedTarget(me, { x: g.x, y: g.y }, friends);
+    const chase = spacedTarget(TUNE, me, { x: g.x, y: g.y }, friends);
     return dbg({ type: "MOVE", x: chase.x, y: chase.y }, "CHASE", "nearest_ghost");
   }
 
-  const back = spacedTarget(me, MY, friends);
+  const back = spacedTarget(TUNE, me, MY, friends);
   return dbg({ type: "MOVE", x: back.x, y: back.y }, "IDLE_BACK", "no_task");
 }
 

@@ -18,6 +18,7 @@
     "./fog": "./fog.ts",
     ".": "./index.ts",
     "./hybrid-bot": "./hybrid-bot.ts",
+    "./hybrid/utils": "./hybrid/utils.ts",
     "./hof": "./hof.ts"
   },
   "dependencies": {
