@@ -27,6 +27,8 @@ const dist  = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const stunCd = new Map();
 /** whether this buster has used RADAR already */
 const radarUsed = new Map();
+/** planned eject landing spot to re-capture */
+const ejectTarget = new Map();
 
 // --- Read init ---
 const bustersPerPlayer = parseInt(readline(), 10);
@@ -91,11 +93,29 @@ while (true) {
       continue;
     }
 
-    // Carrying → consider EJECT toward base before standard MOVE/RELEASE
+    // After an EJECT, move to the landing spot to re-capture
+    const plan = ejectTarget.get(me.id);
+    if (me.state === 0 && plan) {
+      const ng = nearest(ghosts, me.x, me.y);
+      if (ng && ng.d >= BUST_MIN && ng.d <= BUST_MAX) {
+        out.push(`BUST ${ng.it.id} recapture`);
+        ejectTarget.delete(me.id);
+      } else {
+        out.push(`MOVE ${plan.x} ${plan.y} recapture`);
+      }
+      continue;
+    }
+
+    // Carrying → try to score, else consider EJECT toward base
     if (me.state === 1) {
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
 
-      if (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) {
+      if (dHome <= BASE_SCORE_RADIUS) {
+        out.push('RELEASE carry→score');
+        continue;
+      }
+
+      if (dHome <= GENOME.releaseDist) {
         // Compute an eject point up to 1760 units toward base
         const dx = myBase.x - me.x;
         const dy = myBase.y - me.y;
@@ -107,15 +127,14 @@ while (true) {
           const ty = Math.max(0, Math.min(MAP_H - 1, me.y + (dy / d) * travel));
 
           if (dist(tx, ty, myBase.x, myBase.y) < dHome) {
+            ejectTarget.set(me.id, { x: Math.round(tx), y: Math.round(ty) });
             out.push(`EJECT ${Math.round(tx)} ${Math.round(ty)} carry→eject`);
             continue;
           }
         }
-
-        out.push('RELEASE carry→score');
-      } else {
-        out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
       }
+
+      out.push(`MOVE ${myBase.x} ${myBase.y} carry→home`);
       continue;
     }
 
