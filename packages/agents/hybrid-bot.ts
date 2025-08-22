@@ -332,7 +332,8 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
   if (t.type === "CARRY") {
     const homeD = dist(b.x, b.y, MY.x, MY.y);
     const midRisk = enemies.filter(e => dist(e.x, e.y, t.target.x, t.target.y) <= ENEMY_NEAR_RADIUS).length;
-    s -= (homeD - baseD) * WEIGHTS.DIST_PEN; // total penalty is dist to base
+    // Penalize extra distance to base without rewarding when already closer
+    s -= Math.max(0, homeD - baseD) * WEIGHTS.DIST_PEN;
     s -= midRisk * WEIGHTS.CARRY_ENEMY_NEAR_PEN;
     if (t.payload?.id === b.id) s += 2; // slight bias for original carrier
   }

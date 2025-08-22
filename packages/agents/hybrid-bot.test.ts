@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { act, __mem, __pMem, __runAuction, __scoreAssign, __buildTasks, __fog } from './hybrid-bot';
+import { WEIGHTS } from './hybrid-params';
 import { HybridState } from './lib/state';
 import { Fog } from './fog';
 import { hungarian } from './hungarian';
@@ -157,6 +158,28 @@ test('scoreAssign rewards ready stuns for SUPPORT tasks', () => {
   __mem.get(1)!.stunReadyAt = 5;
   let s2 = __scoreAssign(b, task, enemies, MY, 0, st);
   assert.ok(s1 > s2);
+});
+
+test('scoreAssign carry tasks penalize distance to base only when farther', () => {
+  const b: any = { id: 1, x: 0, y: 0 };
+  const task: any = { type: 'CARRY', target: { x: 1000, y: 0 }, payload: { id: 2 }, baseScore: 0 };
+  const enemies: any[] = [];
+  const MY = { x: 0, y: 0 };
+  const st = new HybridState();
+  st.updateRoles([b]);
+  const s = __scoreAssign(b, task, enemies, MY, 0, st);
+  assert.ok(Math.abs(s + 1000 * WEIGHTS.DIST_PEN) < 1e-6);
+});
+
+test('scoreAssign carry tasks penalize full distance when base farther than waypoint', () => {
+  const b: any = { id: 1, x: 4000, y: 0 };
+  const task: any = { type: 'CARRY', target: { x: 3000, y: 0 }, payload: { id: 2 }, baseScore: 0 };
+  const enemies: any[] = [];
+  const MY = { x: 0, y: 0 };
+  const st = new HybridState();
+  st.updateRoles([b]);
+  const s = __scoreAssign(b, task, enemies, MY, 0, st);
+  assert.ok(Math.abs(s + 4000 * WEIGHTS.DIST_PEN) < 1e-6);
 });
 
 test('ejects when threatened and stun on cooldown', () => {
