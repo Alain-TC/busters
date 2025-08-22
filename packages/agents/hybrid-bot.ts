@@ -12,6 +12,9 @@ import {
   releaseBlockDelta,
   twoTurnContestDelta,
   ejectDelta,
+  interceptDelta,
+  twoTurnInterceptDelta,
+  twoTurnEjectDelta,
   scoreCandidate,
   resetMicroPerf,
   microPerf,
@@ -260,15 +263,15 @@ function scoreAssign(b: Ent, t: Task, enemies: Ent[], MY: Pt, tick: number, stat
       const d = dist(b.x, b.y, P.x, P.y);
       s = t.baseScore - d * WEIGHTS.DIST_PEN - d * WEIGHTS.INTERCEPT_DIST_PEN;
       s += duelStunDelta({ me: b, enemy, canStunMe, canStunEnemy: enemy.state !== 2, stunRange: TUNE.STUN_RANGE });
+      s += interceptDelta({ me: b, enemy, myBase: MY });
       s += releaseBlockDelta({ blocker: b, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE });
       const near = (enemy.range ?? dist(b.x, b.y, enemy.x, enemy.y)) <= 2500;
       const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
       if ((near || threat) && !microOverBudget()) {
-        s += twoTurnContestDelta({
+        s += twoTurnInterceptDelta({
           me: b,
           enemy,
-          bustMin: BUST_MIN,
-          bustMax: BUST_MAX,
+          myBase: MY,
           stunRange: TUNE.STUN_RANGE,
           canStunMe,
           canStunEnemy: enemy.state !== 2,
@@ -535,10 +538,24 @@ export function act(ctx: Ctx, obs: Obs) {
       const [dx, dy] = norm(target.x - me.x, target.y - me.y);
       const tx = clamp(me.x + dx * EJECT_MAX, 0, W);
       const ty = clamp(me.y + dy * EJECT_MAX, 0, H);
+      const enemy = enemiesAll[0];
+      const deltas = [ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })];
+      if (enemy && !microOverBudget()) {
+        deltas.push(
+          twoTurnEjectDelta({
+            me,
+            enemy,
+            target: { x: tx, y: ty },
+            myBase: MY,
+            stunRange: TUNE.STUN_RANGE,
+            canStunEnemy: enemy.state !== 2,
+          })
+        );
+      }
       candidates.push({
         act: { type: "EJECT", x: tx, y: ty },
         base: 95,
-        deltas: [ejectDelta({ me, target: { x: tx, y: ty }, myBase: MY, ally })],
+        deltas,
         tag: "EJECT",
         reason: ally ? "handoff" : "base",
       });
@@ -675,6 +692,7 @@ export function act(ctx: Ctx, obs: Obs) {
         const sim = { id: me.id, x: P.x, y: P.y } as Ent;
         const deltas: number[] = [];
         if (enemy) {
+          deltas.push(interceptDelta({ me: sim, enemy, myBase: MY }));
           deltas.push(
             releaseBlockDelta({ blocker: sim, carrier: enemy, myBase: MY, stunRange: TUNE.STUN_RANGE })
           );
@@ -682,11 +700,10 @@ export function act(ctx: Ctx, obs: Obs) {
           const threat = enemy.state === 1 && dist(enemy.x, enemy.y, MY.x, MY.y) <= TUNE.RELEASE_DIST + 2000;
           if ((near || threat) && !microOverBudget()) {
             deltas.push(
-              twoTurnContestDelta({
+              twoTurnInterceptDelta({
                 me: sim,
                 enemy,
-                bustMin: BUST_MIN,
-                bustMax: BUST_MAX,
+                myBase: MY,
                 stunRange: TUNE.STUN_RANGE,
                 canStunMe: canStun,
                 canStunEnemy: enemy.state !== 2,
@@ -706,11 +723,10 @@ export function act(ctx: Ctx, obs: Obs) {
           stunRange: TUNE.STUN_RANGE,
         });
         if (!microOverBudget()) {
-          delta += twoTurnContestDelta({
+          delta += twoTurnInterceptDelta({
             me,
             enemy,
-            bustMin: BUST_MIN,
-            bustMax: BUST_MAX,
+            myBase: MY,
             stunRange: TUNE.STUN_RANGE,
             canStunMe: true,
             canStunEnemy: enemy.state !== 2,

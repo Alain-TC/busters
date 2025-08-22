@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta } from './micro';
+import { contestedBustDelta, duelStunDelta, releaseBlockDelta, twoTurnContestDelta, ejectDelta, interceptDelta, twoTurnInterceptDelta, twoTurnEjectDelta } from './micro';
 import { RULES } from '@busters/shared';
 
 // Verify contested bust uses projected positions
@@ -114,4 +114,46 @@ test('ejectDelta favors progress and ally handoff', () => {
   const ally = { id: 2, x: 3300, y: 3300 };
   const delta = ejectDelta({ me, target, myBase, ally });
   assert.ok(delta > 0);
+});
+
+test('interceptDelta rewards beating enemy to intercept', () => {
+  const me = { id: 1, x: 3000, y: 0 };
+  const enemy = { id: 2, x: 6000, y: 0 };
+  const myBase = { x: 0, y: 0 };
+  const delta = interceptDelta({ me, enemy, myBase });
+  assert.ok(delta > 0);
+  const second = twoTurnInterceptDelta({
+    me,
+    enemy,
+    myBase,
+    stunRange: STUN,
+    canStunMe: true,
+    canStunEnemy: false,
+  });
+  assert.ok(second > delta);
+});
+
+test('twoTurnEjectDelta penalizes enemy near landing', () => {
+  const me = { id: 1, x: 4000, y: 4000 };
+  const target = { x: 3500, y: 3500 };
+  const myBase = { x: 0, y: 0 };
+  const farEnemy = { id: 2, x: 7000, y: 7000 };
+  const nearEnemy = { id: 3, x: 3600, y: 3600 };
+  const safe = twoTurnEjectDelta({
+    me,
+    enemy: farEnemy,
+    target,
+    myBase,
+    stunRange: STUN,
+    canStunEnemy: true,
+  });
+  const risky = twoTurnEjectDelta({
+    me,
+    enemy: nearEnemy,
+    target,
+    myBase,
+    stunRange: STUN,
+    canStunEnemy: true,
+  });
+  assert.ok(risky < safe);
 });
