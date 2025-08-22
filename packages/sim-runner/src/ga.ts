@@ -6,6 +6,7 @@ import { Worker } from 'worker_threads';
 import { runEpisodes } from './runEpisodes';
 import { loadBotModule } from './loadBots';
 import { loadEloTable, saveEloTable, updateElo } from './elo';
+import { gaussian, clamp } from '@busters/shared';
 
 // ----- Elo helpers -----
 type EloTable = Record<string, number>;
@@ -58,16 +59,7 @@ const DEFAULT_MODULE = '@busters/agents/greedy';
     scout: '@busters/agents/scout',
   };
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
-
-function randn() {
-  let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-}
+const randn = () => gaussian(Math.random);
 
 function sampleGenome(m: number[], s: number[]): Genome {
   const g = {

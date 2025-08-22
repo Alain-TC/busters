@@ -8,7 +8,8 @@ import path from "path";
 import { vecToWeights, weightsToVec } from "../genomes/weightsGenome";
 import { DEFAULT_WEIGHTS, type Weights } from "../../../agents/weights";
 import { selectOpponentsPFSP } from "../pfsp";
-import { gaussian, mulberry32, vecMean, vecVar } from "./cem-utils";
+import { gaussian, mulberry32 } from "@busters/shared";
+import { vecMean, vecVar } from "./cem-utils";
 
 // Dimension of the flat weight vector
 const DIM = weightsToVec(DEFAULT_WEIGHTS).length;

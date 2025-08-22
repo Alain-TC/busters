@@ -18,6 +18,7 @@ import {
 
 import { selectOpponentsPFSP } from './pfsp';
 import { loadEloTable, saveEloTable, updateElo } from './elo';
+import { mulberry32, gaussian, clamp } from '@busters/shared';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,24 +35,6 @@ export function getBool(args: string[], name: string, def=false) {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? true : def;
 }
-
-/* ---------------- RNG & math ---------------- */
-function mulberry32(seed: number) {
-  let t = seed >>> 0;
-  return function () {
-    t += 0x6D2B79F5;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function gaussian(rng: () => number) {
-  let u = 0, v = 0;
-  while (u === 0) u = rng();
-  while (v === 0) v = rng();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-}
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
 /* ---------------- Opponent pool ---------------- */
 export async function resolveOppPool(
