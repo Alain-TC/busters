@@ -1,7 +1,7 @@
 // Auto-generated Codingame bot using an evolved genome (no deps).
 const GENOME={radarTurn:1,stunRange:,releaseDist:};
 const WIDTH=16001, HEIGHT=9001, BASE0={x:0,y:0}, BASE1={x:16000,y:9000};
-const BUST_MIN=900, BUST_MAX=1760, STUN_CD_TURNS=20;
+const BUST_MIN=900, BUST_MAX=1760, STUN_CD_TURNS=20, BASE_SCORE_RADIUS=1600;
 const bustersPerPlayer=parseInt(readline(),10);
 const ghostCount=parseInt(readline(),10);
 const myTeamId=parseInt(readline(),10);
@@ -27,7 +27,7 @@ while(true){
     const ne=enemies.map(e=>({e,d:dist(me,e)})).sort((a,b)=>a.d-b.d)[0];
     const ng=ghosts.map(g=>({g,d:dist(me,g)})).sort((a,b)=>a.d-b.d)[0];
     if(me.state===1){
-      if(dBase<=GENOME.releaseDist){ actions.push('RELEASE'); continue; }
+      if(dBase<Math.min(GENOME.releaseDist,BASE_SCORE_RADIUS)){ actions.push('RELEASE'); continue; }
       actions.push(`MOVE ${MY_BASE.x} ${MY_BASE.y}`); continue;
     }
     if(ne && ne.d<=GENOME.stunRange && stunCd.get(me.id)<=0){

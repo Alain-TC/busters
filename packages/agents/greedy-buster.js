@@ -2,7 +2,7 @@
 export function act(ctx, obs) {
   if (obs.self.carrying !== undefined) {
     const dHome = Math.hypot(obs.self.x - ctx.myBase.x, obs.self.y - ctx.myBase.y);
-    if (dHome <= 1400) return { type: 'RELEASE' };
+    if (dHome < 1400) return { type: 'RELEASE' };
     return { type: 'MOVE', x: ctx.myBase.x, y: ctx.myBase.y };
   }
   // Stun nearest enemy if in range and off cooldown

@@ -18,6 +18,7 @@ function dist(ax, ay, bx, by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy
 
 const GENOME = { radarTurn:${g.radarTurn}, stunRange:${g.stunRange}, releaseDist:${g.releaseDist} };
 const BUST_MIN = 900, BUST_MAX = 1760;
+const BASE_SCORE_RADIUS = 1600;
 
 const bustersPerPlayer = parseInt(readline(),10);
 const ghostCount = parseInt(readline(),10);
@@ -74,7 +75,7 @@ while (true) {
 
     if (carrying){
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
-      if (dHome <= GENOME.releaseDist) { actions.push("RELEASE"); }
+      if (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) { actions.push("RELEASE"); }
       else { actions.push(\`MOVE \${myBase.x} \${myBase.y}\`); }
     } else {
       if (nearestEnemy && nearestEnemy.range <= GENOME.stunRange && myStun <= 0){

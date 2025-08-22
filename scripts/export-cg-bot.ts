@@ -43,6 +43,7 @@ function dist(ax, ay, bx, by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy
 
 const GENOME = { radarTurn:${g.radarTurn}, stunRange:${g.stunRange}, releaseDist:${g.releaseDist} };
 const BUST_MIN = 900, BUST_MAX = 1760;
+const BASE_SCORE_RADIUS = 1600;
 const STUN_RANGE = GENOME.stunRange;
 
 // === Codingame init ===
@@ -124,10 +125,10 @@ while (true) {
     let gNear=null, gD=1e9;
     for (const gg of ghosts){ const d=dist(me.x,me.y,gg.x,gg.y); if(d<gD){gD=d; gNear=gg;} }
 
-    // 1) Carrying → go home, RELEASE when close
+    // 1) Carrying → go home, RELEASE when strictly inside base
     if (carrying){
       const dHome = dist(me.x, me.y, myBase.x, myBase.y);
-      actions[slot] = (dHome <= GENOME.releaseDist) ? "RELEASE" : \`MOVE \${myBase.x} \${myBase.y}\`;
+      actions[slot] = (dHome < Math.min(GENOME.releaseDist, BASE_SCORE_RADIUS)) ? "RELEASE" : \`MOVE \${myBase.x} \${myBase.y}\`;
       continue;
     }
 
