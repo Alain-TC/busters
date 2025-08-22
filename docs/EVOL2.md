@@ -8,18 +8,18 @@ Version: 1.0 • Generated: 2025-08-17 20:47 UTC
 Deliver a top-performing Busters bot that operates under 100 ms per turn by combining strong domain heuristics, a light probabilistic model for fog-of-war, multi-agent task assignment, and a tiny local lookahead. Weights and thresholds (≈20–40 coefficients) are optimized offline via CMA-ES / Genetic Algorithms against a diverse opponent pool with self-play and Hall-of-Fame (HOF).
 
 ## Milestones at a Glance
-ID | Name | Outcome / Artifacts
--- | ---- | -------------------
-M0 | Baseline & State Parser | game state, cooldowns, base coords, basic sim hooks
-M1 | Heuristic Core v1 | Explore/Chase/Carry heuristics; ring BUST; anti-collision; planned RADAR
-M2 | STUN & Base Block | Stun priorities, base blocker behavior
-M3 | Fog Estimator | Ghost heatmap + frontiers (coverage planner)
-M4 | Roles & Tasks | Scout/Chaser/Carrier/Interceptor/Blocker/Support + task definitions
-M5 | Auction + Assignment | Score functions + cost matrix + Hungarian/greedy; spacing penalty
-M6 | Action Candidates | MOVE targets (rings, intercept arcs, frontiers) + tactical actions
-M7 | Local Lookahead | 1–2 ply micro-sim for contested captures, stun duels, release blocks
-M8 | Evol Tuning | CMA-ES/GA optimize weights; HOF; PFSP/Elo reports
-M9 | Export & Docs | Bot export for Codingame + comprehensive documentation (this PDF)
+ID | Name | Outcome / Artifacts | Status
+-- | ---- | ------------------- | ------
+M0 | Baseline & State Parser | game state, cooldowns, base coords, basic sim hooks | ✅
+M1 | Heuristic Core v1 | Explore/Chase/Carry heuristics; ring BUST; anti-collision; planned RADAR | ✅
+M2 | STUN & Base Block | Stun priorities, base blocker behavior | ✅
+M3 | Fog Estimator | Ghost heatmap + frontiers (coverage planner) | ✅
+M4 | Roles & Tasks | Scout/Chaser/Carrier/Interceptor/Blocker/Support + task definitions | ✅
+M5 | Auction + Assignment | Score functions + cost matrix + Hungarian/greedy; spacing penalty | ✅
+M6 | Action Candidates | MOVE targets (rings, intercept arcs, frontiers) + tactical actions | ✅
+M7 | Local Lookahead | 1–2 ply micro-sim for contested captures, stun duels, release blocks | ✅
+M8 | Evol Tuning | CMA-ES/GA optimize weights; HOF; PFSP/Elo reports | ✅
+M9 | Export & Docs | Bot export for Codingame + comprehensive documentation (this PDF) | ✅
 
 ## Assumptions & Constraints
 - Simultaneous turns, fog-of-war, continuous coordinates, and time/CPU budget (~100 ms/turn).
