@@ -11,12 +11,13 @@ import { loadEloTable, saveEloTable, updateElo } from './elo';
 type EloTable = Record<string, number>;
 const LEARNER_ID = 'learner';
 
-function loadElo(dir: string): EloTable {
-  return loadEloTable(path.resolve(dir, 'elo.json'));
+function loadElo(file: string): EloTable {
+  return loadEloTable(path.resolve(file));
 }
 
-function saveElo(dir: string, tbl: EloTable) {
-  saveEloTable(tbl, path.resolve(dir, 'elo.json'));
+function saveElo(file: string, tbl: EloTable) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  saveEloTable(tbl, path.resolve(file));
 }
 
 function recordMatch(tbl: EloTable, oppId: string, win: boolean) {
@@ -147,6 +148,8 @@ type CEMOpts = {
   oppRotateInterval?: number;
   /** path for per-tag telemetry log */
   telemetryPath?: string;
+  /** path to persist Elo ratings */
+  eloPath?: string;
 };
 
 // Deterministic env params
@@ -456,7 +459,8 @@ export async function trainCEM(opts: CEMOpts) {
   fs.mkdirSync(artDir, { recursive: true });
 
   HOF.length = 0; // reset HoF
-  const elo = loadElo(artDir); // persisted across runs
+  const eloFile = path.resolve(process.cwd(), opts.eloPath || path.join(opts.artifactsDir, 'elo.json'));
+  const elo = loadElo(eloFile); // persisted across runs
 
   const basePoolSize = opts.oppPool.length;
   const pfspStats: PFSPStats = {};
@@ -469,9 +473,11 @@ export async function trainCEM(opts: CEMOpts) {
   const ema: (number|null)[] = [];
   const emaAlpha = 0.6;
 
+  let nextHofRefresh = 0;
   for (let gen = 0; gen < opts.gens; gen++) {
-    if (opts.hofRefreshInterval && gen % opts.hofRefreshInterval === 0) {
+    if (opts.hofRefreshInterval && gen >= nextHofRefresh) {
       refreshHallOfFame(opts.artifactsDir);
+      nextHofRefresh += opts.hofRefreshInterval;
     }
 
     const pop: Genome[] = Array.from({ length: opts.pop }, () => sampleGenome(m, s));
@@ -525,6 +531,7 @@ export async function trainCEM(opts: CEMOpts) {
     if (opts.oppRotateInterval && (gen + 1) % opts.oppRotateInterval === 0) {
       rotateOpponentPool(opts, elo, pfspStats, basePoolSize);
     }
+    saveElo(eloFile, elo);
     for (const k in pfspStats) delete pfspStats[k];
   }
 
@@ -533,7 +540,7 @@ export async function trainCEM(opts: CEMOpts) {
     try { compileGenomeToJS(path.join(artDir, 'simrunner_best_genome.json'), outBot); } catch {}
   }
 
-  saveElo(artDir, elo);
+  saveElo(eloFile, elo);
   return { best: bestEver!, fitness: bestEverFit };
 }
 

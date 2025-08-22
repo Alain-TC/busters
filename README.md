@@ -47,6 +47,9 @@ pnpm -C packages/sim-runner start train \
   --jobs 1 --seed 42 \
   --opp-pool greedy,random \
   --hof 3
+# optional:
+#   --hof-refresh 5      # refresh HOF every 5 generations
+#   --elo-out path/to/elo.json  # write Elo ratings after each gen
 ```
 
 ### Parallel Train
@@ -57,6 +60,7 @@ pnpm -C packages/sim-runner start train \
   --jobs 8 --seed 42 \
   --opp-pool greedy,random \
   --hof 5
+# optional flags as above
 ```
 
 ## Export a CodinGame Bot
